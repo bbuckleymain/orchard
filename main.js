@@ -132,6 +132,26 @@ async function signOut() {
 ipcMain.handle("token", (_e, refresh) => token(refresh));
 ipcMain.handle("account", () => loadAccount());
 ipcMain.handle("lyrics-external", (_e, q) => lyricsSources.external(q));
+
+// Your Musixmatch API key, encrypted with the system keyring like the Apple sign-in.
+const mxmStore = path.join(app.getPath("userData"), "musixmatch.bin");
+function loadMusixmatchKey() {
+  try {
+    const raw = fs.readFileSync(mxmStore);
+    lyricsSources.setMusixmatchKey(safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString());
+  } catch {}
+}
+ipcMain.handle("musixmatch-status", () => lyricsSources.musixmatchStatus());
+ipcMain.handle("musixmatch-key", (_e, key) => {
+  key = String(key || "").trim();
+  if (!key) { try { fs.unlinkSync(mxmStore); } catch {} }
+  else {
+    fs.mkdirSync(path.dirname(mxmStore), { recursive: true });
+    fs.writeFileSync(mxmStore, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(key) : key, { mode: 0o600 });
+  }
+  lyricsSources.setMusixmatchKey(key);
+  return lyricsSources.musixmatchStatus();
+});
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
 ipcMain.on("window", (_e, action) => {
@@ -162,6 +182,7 @@ app.whenReady().then(async () => {
     cb({ requestHeaders: d.requestHeaders });
   });
   port = await serve();
+  loadMusixmatchKey();
   await components.whenReady(); // Widevine CDM is downloaded/updated here on first launch
   console.log("[Orchard] Widevine:", JSON.stringify(components.status()));
   createWindow();

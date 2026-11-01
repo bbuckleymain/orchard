@@ -143,12 +143,14 @@ const Lyrics = (() => {
       found = await apple(music, catalogId);
       if (found && !wordSync) found = { ...found, lines: found.lines.map(l => ({ ...l, words: [], bg: [] })), worded: false };
     }
-    if (!found || !found.synced) {
+    // Elsewhere when Apple has nothing timed, or only line timings while word-by-word is on.
+    if (!found || !found.synced || (wordSync && !found.worded)) {
       const ext = await glass.lyrics({ artist: a.artistName || item.artistName, title: a.name || item.title, album: a.albumName || "",
                                        duration: (a.durationInMillis || item.playbackDuration || 0) / 1000, wordSync });
       if (ext) {
         const parsed = parseLRC(ext.text);
-        if (parsed.lines.length && (!found || parsed.synced)) found = { ...parsed, source: ext.source };
+        const better = !found || (parsed.synced && !found.synced) || (parsed.worded && !found.worded);
+        if (parsed.lines.length && better) found = { ...parsed, source: ext.source };
       }
     }
     if (found?.synced) found.lines = withRests(found.lines);

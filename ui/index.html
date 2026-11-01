@@ -139,6 +139,15 @@
         <div><div>Word-by-word lyrics</div><div class="muted">Light words up as they're sung when the lyrics are timed that finely (Apple Music, NetEase). Off shows whole lines.</div></div>
         <input type="checkbox" id="wordSync" class="toggle">
       </label>
+      <div class="card" style="margin-top:8px">
+        <div>Musixmatch API key</div>
+        <div class="muted">Optional. With your own key (a paid plan for timed lyrics), Musixmatch is asked first. Stored encrypted.</div>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <input id="mxmKey" type="password" placeholder="Paste your key" style="flex:1;padding:6px 10px;border-radius:10px;border:1px solid rgba(0,80,140,.3)">
+          <button class="action" id="mxmSave">Save</button>
+        </div>
+        <div class="muted" id="mxmStatus" style="margin-top:6px"></div>
+      </div>
       <p class="section">Playback</p>
       <label class="card toggle-row">
         <div><div>Remember volume</div><div class="muted">Keep the volume between launches</div></div>

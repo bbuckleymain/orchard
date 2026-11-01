@@ -35,6 +35,7 @@ Orchard plays Apple Music the way Cider does. No Cider code is copied, but the m
   loaded from Apple's CDN at run time and is not part of this repository.
 - **[LRCLIB](https://lrclib.net)**: the open, community-run synced lyrics database
 - **NetEase Cloud Music**: word-by-word lyrics for songs Apple has none for
+- **[Musixmatch](https://developer.musixmatch.com)**: timed lyrics through its official API, with your own key
 
 ## Design
 

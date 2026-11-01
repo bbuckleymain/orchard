@@ -45,7 +45,7 @@ mkdir -p "$APP" "$(dirname "$BIN")" "$(dirname "$DESKTOP")" "$(dirname "$ICON")"
 # Fresh copy of the app (Electron itself included), leaving nothing stale behind.
 rm -rf "$APP.new"
 mkdir -p "$APP.new"
-cp -a main.js preload.js lyrics-sources.js mpris.js package.json ui node_modules "$APP.new/"
+cp -a main.js preload.js lyrics-sources.js mpris.js musixmatch.js package.json ui node_modules "$APP.new/"
 rm -rf "$APP"
 mv "$APP.new" "$APP"
 

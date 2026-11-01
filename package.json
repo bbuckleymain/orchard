@@ -30,6 +30,7 @@
       "preload.js",
       "lyrics-sources.js",
       "mpris.js",
+      "musixmatch.js",
       "package.json",
       "ui/**/*"
     ],

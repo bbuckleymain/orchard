@@ -88,13 +88,32 @@ async function lrclib(artist, title, album, duration) {
   return { synced: usable[0].syncedLyrics || "", plain: usable[0].plainLyrics || "" };
 }
 
-// Best first: word-timed NetEase, then LRCLIB (synced, then plain).
+// Musixmatch, when you've given a key: stops being asked once it says the key or plan is the problem.
+const musixmatch = require("./musixmatch");
+const mxm = { key: "", status: "" };
+function setMusixmatchKey(key) { mxm.key = String(key || "").trim(); mxm.status = ""; }
+const musixmatchStatus = () => ({ hasKey: !!mxm.key, status: mxm.status });
+
+async function askMusixmatch(artist, title, duration) {
+  if (!mxm.key || mxm.status) return null;
+  try { return await musixmatch.fetchLyrics(mxm.key, artist, title, duration); }
+  catch (e) {
+    if (e instanceof musixmatch.PlanError) { mxm.status = e.message; console.warn(`[Orchard] Musixmatch: ${e.message}; not asking it again`); }
+    return null;
+  }
+}
+
+// Best first, as in Aerwave: Musixmatch's word timings (with a key), NetEase's word timings,
+// Musixmatch's line timings, then LRCLIB (synced, then plain).
 async function external({ artist, title, album, duration, wordSync }) {
   if (!artist || !title) return null;
+  const mxmFound = await askMusixmatch(artist, title, duration);
+  if (mxmFound?.worded && wordSync) return { text: mxmFound.text, source: "Musixmatch" };
   if (wordSync) {
     const lrc = await netease(artist, title, duration);
     if (lrc) return { text: lrc, source: "NetEase" };
   }
+  if (mxmFound) return { text: mxmFound.text, source: "Musixmatch" };
   const found = await lrclib(artist, title, album, duration);
   if (found?.synced) return { text: found.synced, source: "LRCLIB" };
   if (!wordSync) {
@@ -105,4 +124,4 @@ async function external({ artist, title, album, duration, wordSync }) {
   return null;
 }
 
-module.exports = { external };
+module.exports = { external, setMusixmatchKey, musixmatchStatus };

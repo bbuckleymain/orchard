@@ -802,6 +802,12 @@ $("settingsBtn").onclick = () => toggleSettings(overlay.hidden);
 $("closeSettings").onclick = $("dim").onclick = () => toggleSettings(false);
 $("rememberVol").checked = prefs.rememberVolume;
 $("rememberVol").onchange = e => { prefs.rememberVolume = e.target.checked; savePrefs(); };
+async function showMxm(st) {
+  st ??= await glass.musixmatchStatus();
+  $("mxmStatus").textContent = !st.hasKey ? "No key: using Apple Music, NetEase and LRCLIB." : st.status ? "Musixmatch: " + st.status : "Key saved. Musixmatch is asked first.";
+}
+$("mxmSave").onclick = async () => { const st = await glass.setMusixmatchKey($("mxmKey").value); $("mxmKey").value = ""; showMxm(st); };
+showMxm();
 $("wordSync").checked = prefs.wordSync;
 $("wordSync").onchange = e => { prefs.wordSync = e.target.checked; savePrefs(); if (pane === "lyrics") loadLyrics(true); };
 
