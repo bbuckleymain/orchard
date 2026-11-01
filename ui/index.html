@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Orchard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="ambient">
+    <div class="sun"></div>
+    <div class="hill h1"></div>
+    <div class="hill h2"></div>
+    <img id="glow" alt="">
+    <div class="bubbles">
+      <i style="--x:8%;--s:60px;--d:19s;--w:-2s"></i><i style="--x:22%;--s:26px;--d:14s;--w:-9s"></i>
+      <i style="--x:37%;--s:44px;--d:23s;--w:-5s"></i><i style="--x:55%;--s:18px;--d:12s;--w:-1s"></i>
+      <i style="--x:68%;--s:72px;--d:27s;--w:-14s"></i><i style="--x:81%;--s:30px;--d:16s;--w:-7s"></i>
+      <i style="--x:92%;--s:48px;--d:21s;--w:-11s"></i><i style="--x:46%;--s:22px;--d:17s;--w:-3s"></i>
+    </div>
+  </div>
+
+  <div id="root">
+    <header>
+      <div class="brand">
+        <button class="round" id="settingsBtn" title="Settings">
+          <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+        </button>
+        <span class="name">Orchard</span>
+      </div>
+      <div class="pills">
+        <button class="pill" data-view="home">Home</button>
+        <button class="pill on" data-view="search">Search</button>
+        <button class="pill" data-view="recent">Recent</button>
+        <button class="pill" data-view="albums">Albums</button>
+        <button class="pill" data-view="library">Library</button>
+      </div>
+      <div class="caption">
+        <button data-win="min" title="Minimize"><svg viewBox="0 0 24 24"><path d="M7 16h10"/></svg></button>
+        <button data-win="max" title="Maximize"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/></svg></button>
+        <button data-win="close" class="close" title="Close"><svg viewBox="0 0 24 24"><path d="M8 8l8 8M16 8l-8 8"/></svg></button>
+      </div>
+    </header>
+
+    <main>
+      <section class="glass list-pane">
+        <div class="search">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input id="q" placeholder="Songs, artists, or an Apple Music link" autocomplete="off" spellcheck="false">
+        </div>
+        <div id="filters" class="chips">
+          <button class="chip on" data-type="all">All</button>
+          <button class="chip" data-type="songs">Songs</button>
+          <button class="chip" data-type="albums">Albums</button>
+          <button class="chip" data-type="artists">Artists</button>
+          <button class="chip" data-type="playlists">Playlists</button>
+        </div>
+        <button id="crumb" hidden><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span id="crumbText">Back</span></button>
+        <div id="listTitle" hidden></div>
+        <ul id="list"></ul>
+        <p id="status">Starting Apple Music…</p>
+      </section>
+
+      <section class="glass now">
+        <div class="pills now-tabs">
+          <button class="pill on" data-pane="now">Now Playing</button>
+          <button class="pill" data-pane="lyrics">Lyrics</button>
+          <button class="pill" data-pane="queue">Queue</button>
+        </div>
+
+        <div class="stage">
+          <div class="pane" id="paneNow">
+            <div id="art"><img id="artImg" alt=""></div>
+            <h1 id="title">Nothing playing</h1>
+            <h2 id="artist">Pick a track from the list</h2>
+          </div>
+
+          <div class="pane" id="paneLyrics" hidden>
+            <div class="mini"><img class="miniArt" alt=""><div><div class="miniTitle"></div><div class="miniArtist"></div></div></div>
+            <div id="lyrics"></div>
+            <div class="lyrics-foot">
+              <span id="lyricsSource"></span>
+              <span class="nudge">
+                <button id="nudgeLess" title="Words later (−0.1 s)">−</button>
+                <span id="nudgeVal" title="Lyric timing offset">0.0 s</span>
+                <button id="nudgeMore" title="Words earlier (+0.1 s)">+</button>
+              </span>
+            </div>
+          </div>
+
+          <div class="pane" id="paneQueue" hidden>
+            <div class="mini"><img class="miniArt" alt=""><div><div class="miniTitle"></div><div class="miniArtist"></div></div></div>
+            <ul id="queue"></ul>
+          </div>
+        </div>
+
+        <div class="transport">
+          <input type="range" id="seek" min="0" max="1" step="0.1" value="0">
+          <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+          <div class="controls">
+            <button class="round small" id="shuffle" title="Shuffle"><svg viewBox="0 0 24 24"><path d="M3 7h3.5c2 0 3.3 1 4.5 3l2 4c1.2 2 2.5 3 4.5 3H21M18 14l3 3-3 3M3 17h3.5c1.4 0 2.5-.5 3.4-1.5M14.1 8.5c.9-1 2-1.5 3.4-1.5H21M18 4l3 3-3 3"/></svg></button>
+            <button class="round mid" id="prev" title="Previous"><svg viewBox="0 0 24 24"><path class="fill" d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+            <button class="round big" id="play" title="Play"><svg viewBox="0 0 24 24"><path class="fill" id="playIcon" d="M7 4v16l13-8z"/></svg></button>
+            <button class="round mid" id="next" title="Next"><svg viewBox="0 0 24 24"><path class="fill" d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+            <button class="round small" id="repeat" title="Repeat"><svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></svg><span id="repeatOne">1</span></button>
+          </div>
+          <div class="volume">
+            <svg viewBox="0 0 24 24"><path class="fill" d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
+            <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8">
+            <div id="badge" class="badge" hidden>256 kbps AAC</div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="overlay" hidden>
+    <div id="dim"></div>
+    <div id="sheet" class="glass">
+      <div class="sheet-head">
+        <h3>Settings</h3>
+        <button class="round" id="closeSettings" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <p class="section">Account</p>
+      <div class="card account">
+        <div class="am-icon"><svg viewBox="0 0 24 24"><path class="fill" d="M9 18V6l11-2v12"/><circle class="fill" cx="6" cy="18" r="3"/><circle class="fill" cx="17" cy="16" r="3"/></svg></div>
+        <div class="who">
+          <div id="accName">Apple Music</div>
+          <div id="accDetail" class="muted"></div>
+        </div>
+        <button class="action" id="accAction">Connect</button>
+      </div>
+      <p class="section">Sound</p>
+      <div class="card">
+        <div>Audio quality</div>
+        <div class="muted">Always High Quality, 256 kbps AAC: the best Apple Music sends to web players such as Cider. Orchard locks it there so it never drops to 64 kbps on a slow connection.</div>
+      </div>
+      <p class="section">Lyrics</p>
+      <label class="card toggle-row">
+        <div><div>Word-by-word lyrics</div><div class="muted">Light words up as they're sung when the lyrics are timed that finely (Apple Music, NetEase). Off shows whole lines.</div></div>
+        <input type="checkbox" id="wordSync" class="toggle">
+      </label>
+      <p class="section">Playback</p>
+      <label class="card toggle-row">
+        <div><div>Remember volume</div><div class="muted">Keep the volume between launches</div></div>
+        <input type="checkbox" id="rememberVol" class="toggle">
+      </label>
+    </div>
+  </div>
+
+  <div id="menu" hidden></div>
+
+  <script src="lyrics.js"></script>
+  <script src="app.js"></script>
+  <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" data-web-components async></script>
+</body>
+</html>

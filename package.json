@@ -1,0 +1,14 @@
+{
+  "name": "orchard",
+  "productName": "Orchard",
+  "version": "1.0.0",
+  "description": "A simple Apple Music player for Linux in the style of GlassPlayer. MusicKit JS + Widevine, like Cider.",
+  "main": "main.js",
+  "license": "GPL-3.0",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "https://github.com/castlabs/electron-releases/archive/refs/tags/v43.7.7+wvcus.tar.gz"
+  }
+}
