@@ -1,4 +1,4 @@
-// Lyrics from outside Apple, for songs Apple has none for. Ported from Aeris (aeris/netease.py, aeris/lrclib.py).
+// Lyrics from outside Apple, for songs Apple has none for. Ported from Aerwave (aerwave/netease.py, aerwave/lrclib.py).
 // Both come back as LRC text; NetEase's is the "enhanced" kind with a stamp before every word.
 
 const TIMEOUT = 9000;

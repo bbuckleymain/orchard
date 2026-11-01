@@ -249,7 +249,7 @@ input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px;
 #repeatOne { position: absolute; right: 5px; bottom: 3px; font-size: 9px; font-weight: 800; display: none; }
 #repeat.one #repeatOne { display: block; }
 
-/* lyrics: the line being sung is sharp; the rest dim and soften with distance, like Aeris */
+/* lyrics: the line being sung is sharp; the rest dim and soften with distance, like Aerwave */
 #lyrics { position: relative; flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; padding: 16vh 8px 24vh;
   -webkit-mask-image: linear-gradient(transparent 0, #000 14%, #000 80%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 14%, #000 80%, transparent 100%); }
 #lyrics::-webkit-scrollbar { display: none; }

@@ -7,6 +7,11 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const lyricsSources = require("./lyrics-sources");
+const mpris = require("./mpris");
+
+// On Linux Orchard publishes its own MPRIS player (see mpris.js), so Chromium's anonymous one is turned off:
+// two players for the same song would make scrobblers count it twice.
+if (process.platform === "linux") app.commandLine.appendSwitch("disable-features", "HardwareMediaKeyHandling");
 
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
 const WEB = "https://music.apple.com";
@@ -136,6 +141,9 @@ ipcMain.on("window", (_e, action) => {
   else if (action === "max") win.isMaximized() ? win.unmaximize() : win.maximize();
 });
 
+// On Windows this groups the taskbar icon and names Orchard in the media controls.
+if (process.platform === "win32") app.setAppUserModelId("io.github.bbuckleymain.orchard");
+
 // One Orchard at a time: two copies sharing a profile can corrupt it, and Apple only streams to one at once.
 if (!app.requestSingleInstanceLock()) app.quit();
 app.on("second-instance", () => {
@@ -157,6 +165,14 @@ app.whenReady().then(async () => {
   await components.whenReady(); // Widevine CDM is downloaded/updated here on first launch
   console.log("[Orchard] Widevine:", JSON.stringify(components.status()));
   createWindow();
+  if (process.platform === "linux") {
+    const update = await mpris.start({
+      send: msg => win?.webContents.send("mpris", msg),
+      raise: () => { if (win) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); } },
+      quit: () => app.quit(),
+    });
+    if (update) ipcMain.on("mpris-state", (_e, state) => update(state));
+  }
 });
 
 app.on("window-all-closed", () => app.quit());

@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld("glass", {
   signOut: () => ipcRenderer.invoke("sign-out"),
   lyrics: query => ipcRenderer.invoke("lyrics-external", query),
   window: action => ipcRenderer.send("window", action),
+  mprisState: state => ipcRenderer.send("mpris-state", state),
+  onMpris: cb => ipcRenderer.on("mpris", (_e, msg) => cb(msg)),
 });

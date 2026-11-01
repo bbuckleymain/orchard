@@ -1,11 +1,11 @@
-// Synced lyrics, in the manner of Aeris and Cider.
+// Synced lyrics, in the manner of Aerwave and Cider.
 // Sources, best first: Apple Music's own lyrics (timed by the syllable), NetEase (by the word), LRCLIB (by the line).
 // Every source becomes the same shape:
 //   line = { start, end, text, words: [{ start, end, text, join }], bg: [words], agent, rest: [from, to] | null }
 // where `join` means the next syllable belongs to the same word (no space between).
 
 const Lyrics = (() => {
-  const REST = 5.0, WORD_TIME = 0.55, LEAST_SUNG = 3.0, MOST_SUNG = 12.0, LINGER = 0.35;   // from Aeris
+  const REST = 5.0, WORD_TIME = 0.55, LEAST_SUNG = 3.0, MOST_SUNG = 12.0, LINGER = 0.35;   // from Aerwave
 
   // "14.865", "1:02.5", "1:02:03.4", "12.3s"
   function clock(t) {
@@ -47,7 +47,7 @@ const Lyrics = (() => {
     return { lines: synced ? lines : lines.map(l => ({ ...l, start: null, end: null })), synced, worded: timing === "Word" };
   }
 
-  // ---- LRC, plain or enhanced (Aeris's parse_lrc) ----
+  // ---- LRC, plain or enhanced (Aerwave's parse_lrc) ----
   const STAMP = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g;
   const WORD_STAMP = /<(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?>/g;
   const ID_TAG = /^\s*\[(ar|ti|al|au|by|re|ve|length|offset|tool|encoder):([^\]]*)\]\s*$/i;
@@ -87,7 +87,7 @@ const Lyrics = (() => {
 
   const spoken = words => words.map((w, i) => w.text + (w.join || i === words.length - 1 ? "" : " ")).join("");
 
-  // ---- instrumental breaks (Aeris's with_rests) ----
+  // ---- instrumental breaks (Aerwave's with_rests) ----
   function stopsAt(line, next) {
     if (line.end != null) return line.end;
     if (line.start == null) return null;

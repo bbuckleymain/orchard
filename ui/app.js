@@ -47,6 +47,11 @@ async function start() {
   $("vol").value = music.volume; fill($("vol"));
 
   music.addEventListener("playbackStateDidChange", onState);
+  music.addEventListener("playbackStateDidChange", () => report());
+  music.addEventListener("nowPlayingItemDidChange", () => report());
+  music.addEventListener("playbackDurationDidChange", () => report());
+  music.addEventListener("playbackVolumeDidChange", () => report());
+  setInterval(() => { if (music.isPlaying) report(); }, 5000);   // keeps the position honest
   music.addEventListener("nowPlayingItemDidChange", onItem);
   music.addEventListener("playbackTimeDidChange", onTime);
   music.addEventListener("playbackDurationDidChange", onTime);
@@ -346,6 +351,10 @@ function onItem() {
 
 function onTime() {
   const dur = music.currentPlaybackDuration || 0;
+  if (dur && "mediaSession" in navigator && navigator.mediaSession.setPositionState) {
+    // Without this, system media controls (and scrobblers reading them) see every song as an endless stream.
+    try { navigator.mediaSession.setPositionState({ duration: trackLength() || dur, position: Math.min(playTime(), trackLength() || dur), playbackRate: 1 }); } catch {}
+  }
   if (seeking || !dur) return;
   const s = $("seek");
   s.max = dur; s.value = music.currentPlaybackTime || 0; fill(s);
@@ -522,7 +531,7 @@ $("lyrics").addEventListener("click", e => {
   const line = el && lyr?.synced && lyr.lines[+el.dataset.i];
   if (!line || line.rest || line.start == null) return;
   userScrollUntil = 0;
-  music.seekToTime(Math.max(0, line.start - prefs.nudge + 0.01));
+  music.seekToTime(Math.max(0, line.start - prefs.nudge + 0.01)).then(() => report({ seeked: true }));
 });
 
 function showNudge() { $("nudgeVal").textContent = `${prefs.nudge > 0 ? "+" : ""}${prefs.nudge.toFixed(1)} s`; }
@@ -764,7 +773,7 @@ $("prev").onclick = () => music && (music.currentPlaybackTime > 3 ? music.seekTo
 
 const seek = $("seek");
 seek.addEventListener("input", () => { seeking = true; fill(seek); $("cur").textContent = fmt(seek.value); });
-seek.addEventListener("change", async () => { await music?.seekToTime(+seek.value); seeking = false; });
+seek.addEventListener("change", async () => { await music?.seekToTime(+seek.value); seeking = false; report({ seeked: true }); });
 
 const vol = $("vol");
 vol.addEventListener("input", () => {
@@ -811,4 +820,46 @@ if ("mediaSession" in navigator) {
   navigator.mediaSession.setActionHandler("nexttrack", () => music?.skipToNextItem());
   navigator.mediaSession.setActionHandler("previoustrack", () => music?.skipToPreviousItem());
 }
+// ---- what's playing, for the desktop (MPRIS on Linux: media keys, the panel, scrobblers) ----
+function trackLength() {
+  const it = music?.nowPlayingItem;
+  return (it?.playbackDuration || it?.attributes?.durationInMillis || 0) / 1000 || music?.currentPlaybackDuration || 0;
+}
+
+function report(extra = {}) {
+  if (!music) return;
+  const it = music.nowPlayingItem;
+  glass.mprisState({
+    status: it ? (music.isPlaying ? "Playing" : "Paused") : "Stopped",
+    position: playTime(),
+    volume: music.volume,
+    track: it ? {
+      id: it.id,
+      title: it.title || it.attributes?.name || "",
+      artist: it.artistName || it.attributes?.artistName || "",
+      album: it.albumName || it.attributes?.albumName || "",
+      length: trackLength(),
+      trackNumber: it.trackNumber || it.attributes?.trackNumber || 0,
+      art: art(it.attributes?.artwork || it.artwork, 600),
+      url: it.attributes?.url || "",
+    } : null,
+    ...extra,
+  });
+}
+
+glass.onMpris(async ({ action, value }) => {
+  if (!music) return;
+  switch (action) {
+    case "play": await music.play(); break;
+    case "pause": await music.pause(); break;
+    case "playpause": music.isPlaying ? await music.pause() : await music.play(); break;
+    case "next": await music.skipToNextItem(); break;
+    case "previous": $("prev").click(); break;
+    case "seek": await music.seekToTime(Math.max(0, value)); report({ seeked: true }); return;
+    case "seekby": await music.seekToTime(Math.max(0, playTime() + value)); report({ seeked: true }); return;
+    case "volume": music.volume = value; vol.value = value; fill(vol); prefs.volume = value; savePrefs(); break;
+  }
+  report();
+});
+
 fill(seek); fill(vol);

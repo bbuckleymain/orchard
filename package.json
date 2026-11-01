@@ -6,9 +6,58 @@
   "main": "main.js",
   "license": "GPL-3.0",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "dist:win": "electron-builder --win nsis zip --x64",
+    "dist:linux": "electron-builder --linux AppImage --x64"
   },
   "devDependencies": {
-    "electron": "https://github.com/castlabs/electron-releases/archive/refs/tags/v43.7.7+wvcus.tar.gz"
+    "electron": "https://github.com/castlabs/electron-releases/archive/refs/tags/v43.7.7+wvcus.tar.gz",
+    "electron-builder": "26.17.0"
+  },
+  "author": {
+    "name": "bbuckleymain"
+  },
+  "homepage": "https://github.com/bbuckleymain/orchard",
+  "build": {
+    "appId": "io.github.bbuckleymain.orchard",
+    "productName": "Orchard",
+    "electronVersion": "43.7.7+wvcus",
+    "electronDownload": {
+      "mirror": "https://github.com/castlabs/electron-releases/releases/download/"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "lyrics-sources.js",
+      "mpris.js",
+      "package.json",
+      "ui/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "afterPack": "build/vmp-sign.js",
+    "win": {
+      "icon": "build/icon.ico",
+      "artifactName": "Orchard-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Orchard",
+      "artifactName": "Orchard-Setup-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "artifactName": "Orchard-${version}-${arch}.${ext}"
+    }
+  },
+  "dependencies": {
+    "dbus-next": "0.10.2"
   }
 }

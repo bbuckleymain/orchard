@@ -12,7 +12,7 @@ using the public developer token from the music.apple.com web player and Apple's
 - Right-click anything for Play, Shuffle, Play Next, Add to Queue, Add to Library and Add to Playlist
 - Shuffles are truly uniform: Fisher–Yates driven by the system's cryptographic random source, which also
   replaces `Math.random` for MusicKit's own shuffle button
-- **Synced lyrics** (<kbd>L</kbd>), done the Aeris way: the line being sung is sharp, the rest dim and blur with
+- **Synced lyrics** (<kbd>L</kbd>), done the Aerwave way: the line being sung is sharp, the rest dim and blur with
   distance, words fill in as they're sung, instrumental breaks of 5 s or more show three dots that grow, click a line
   to jump there, and a ± timing nudge for lyrics that run early or late. Sources, best first: Apple Music's own
   (timed by the syllable, with background vocals and duet sides, the way Cider shows them), NetEase (word by word),
@@ -20,7 +20,9 @@ using the public developer token from the music.apple.com web player and Apple's
 - **Queue** (<kbd>Q</kbd>): what's playing and up next, click to jump, shuffle and repeat; right-click a song,
   album or playlist for *Play Next* / *Add to Queue*
 - Streams at High Quality, 256 kbps AAC (the most Apple sends to web players), locked so it never drops to 64 kbps
-- Media keys / MPRIS through the browser's Media Session
+- Its own MPRIS player on Linux (`org.mpris.MediaPlayer2.orchard`, "Orchard") with the real song length,
+  album, artwork and position, so media keys, the panel and scrobblers like Pano Scrobbler work properly
+  (allow "Orchard" in your scrobbler once; the name no longer changes between launches)
 
 Needs an Apple Music subscription for full songs; without signing in you get 30 second previews.
 
@@ -47,6 +49,28 @@ To use your own Apple Developer token instead of the web player's, set `APPLE_MU
 castLabs Electron's zygote crashes at startup (`zygote_host_impl_linux.cc ... Invalid argument`) when the
 `CHROME_DESKTOP` environment variable is set, which happens when it's launched from inside another Chromium app's
 terminal. The `orchard` launcher clears it; if you start Electron some other way, run `unset CHROME_DESKTOP` first.
+
+## Windows
+
+Orchard runs on Windows too. Build the installer and a portable zip (cross-builds from Linux with wine):
+
+```bash
+npm install
+npm run dist:win
+```
+
+The files land in `dist/`: `Orchard-Setup-<version>-x64.exe` and `Orchard-<version>-win-x64.zip`.
+
+**Widevine on Windows needs a VMP-signed build.** Apple's licence server, like most, only hands keys to
+Electron builds that castLabs has signed (Cider's Windows build is signed the same way). Signing is free:
+
+```bash
+pip install --user castlabs-evs
+python3 -m castlabs_evs.account signup
+```
+
+After that, `npm run dist:win` signs the app automatically (see `build/vmp-sign.js`). Set
+`ORCHARD_REQUIRE_VMP=1` to make an unsigned build fail instead of only warning.
 
 ## Credits
 
