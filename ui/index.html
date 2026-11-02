@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <title>Orchard</title>
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="themes.css">
 </head>
 <body>
   <div id="ambient">
@@ -94,8 +95,8 @@
         </div>
 
         <div class="transport">
-          <input type="range" id="seek" min="0" max="1" step="0.1" value="0">
-          <div class="times"><span id="cur">0:00</span><span id="dur">0:00</span></div>
+          <div class="seekwrap"><input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="Position"><span id="seekTip"></span></div>
+          <div class="times"><span id="cur">0:00</span><span id="dur" title="Click to show time left">0:00</span></div>
           <div class="controls">
             <button class="round small" id="shuffle" title="Shuffle"><svg viewBox="0 0 24 24"><path d="M3 7h3.5c2 0 3.3 1 4.5 3l2 4c1.2 2 2.5 3 4.5 3H21M18 14l3 3-3 3M3 17h3.5c1.4 0 2.5-.5 3.4-1.5M14.1 8.5c.9-1 2-1.5 3.4-1.5H21M18 4l3 3-3 3"/></svg></button>
             <button class="round mid" id="prev" title="Previous"><svg viewBox="0 0 24 24"><path class="fill" d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
@@ -104,8 +105,8 @@
             <button class="round small" id="repeat" title="Repeat"><svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></svg><span id="repeatOne">1</span></button>
           </div>
           <div class="volume">
-            <svg viewBox="0 0 24 24"><path class="fill" d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>
-            <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8">
+            <button id="volIcon" title="Mute (M)"><svg viewBox="0 0 24 24"><path class="fill" d="M4 9h4l5-4v14l-5-4H4z"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="slash" d="M16 9l5 6M21 9l-5 6"/></svg></button>
+            <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
             <div id="badge" class="badge" hidden>256 kbps AAC</div>
           </div>
         </div>
@@ -119,6 +120,12 @@
       <div class="sheet-head">
         <h3>Settings</h3>
         <button class="round" id="closeSettings" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <p class="section">Appearance</p>
+      <div class="themes" id="themes">
+        <button class="theme" data-theme-pick="aero"><span class="swatch"></span>Aero</button>
+        <button class="theme" data-theme-pick="night"><span class="swatch"></span>Night Aero</button>
+        <button class="theme" data-theme-pick="catppuccin"><span class="swatch"></span>Catppuccin</button>
       </div>
       <p class="section">Account</p>
       <div class="card account">
@@ -153,12 +160,28 @@
         <div><div>Remember volume</div><div class="muted">Keep the volume between launches</div></div>
         <input type="checkbox" id="rememberVol" class="toggle">
       </label>
+      <p class="section">Keyboard</p>
+      <div class="card">
+        <dl class="keys">
+          <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
+          <dt><kbd>←</kbd><kbd>→</kbd></dt><dd>Back / forward 5 seconds</dd>
+          <dt><kbd>Shift</kbd><kbd>←</kbd><kbd>→</kbd></dt><dd>Previous / next song</dd>
+          <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Volume up / down (or scroll over the volume slider)</dd>
+          <dt><kbd>M</kbd></dt><dd>Mute</dd>
+          <dt><kbd>/</kbd> or <kbd>Ctrl</kbd><kbd>F</kbd></dt><dd>Search</dd>
+          <dt><kbd>L</kbd></dt><dd>Lyrics</dd>
+          <dt><kbd>Q</kbd></dt><dd>Queue</dd>
+          <dt><kbd>Backspace</kbd></dt><dd>Back</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close menus and settings</dd>
+        </dl>
+      </div>
     </div>
   </div>
 
   <div id="menu" hidden></div>
 
   <script src="lyrics.js"></script>
+  <script src="queue.js"></script>
   <script src="app.js"></script>
   <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" data-web-components async></script>
 </body>

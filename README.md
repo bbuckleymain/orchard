@@ -18,7 +18,15 @@ using the public developer token from the music.apple.com web player and Apple's
   (timed by the syllable, with background vocals and duet sides, the way Cider shows them), NetEase (word by word),
   LRCLIB (line by line)
 - **Queue** (<kbd>Q</kbd>): what's playing and up next, click to jump, shuffle and repeat; right-click a song,
-  album or playlist for *Play Next* / *Add to Queue*
+  album or playlist for *Play Next* / *Add to Queue*. Drag songs in Up Next to rearrange them, remove one with its ×,
+  or clear Up Next (click *Clear* twice); right-click a queued song to move it up, down, to the top or bottom. The
+  song that's playing carries on through all of it
+- Three themes in Settings → Appearance: **Aero** (the original sky-and-grass look), **Night Aero** (the same
+  glossy glass after dark, with a moon and stars) and **Catppuccin** (Mocha: flat, soft and dark)
+- Keyboard: <kbd>Space</kbd> play/pause, <kbd>←</kbd>/<kbd>→</kbd> seek 5 s, <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>
+  previous/next, <kbd>↑</kbd>/<kbd>↓</kbd> volume, <kbd>M</kbd> mute, <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> search
+  (all listed in Settings). Scroll over the volume slider to change it, click the speaker to mute, hover the seek bar
+  to see where you'd land, and click the song length to show the time left instead
 - Streams at High Quality, 256 kbps AAC (the most Apple sends to web players), locked so it never drops to 64 kbps
 - Its own MPRIS player on Linux (`org.mpris.MediaPlayer2.orchard`, "Orchard") with the real song length,
   album, artwork and position, so media keys, the panel and scrobblers like Pano Scrobbler work properly

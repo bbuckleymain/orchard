@@ -21,6 +21,17 @@ prefs.rememberVolume ??= true;
 prefs.wordSync ??= true;
 prefs.nudge ??= 0;
 
+// ---- theme: Aero (the original look), Night Aero or Catppuccin; see themes.css ----
+const THEMES = ["aero", "night", "catppuccin"];
+function setTheme(name) {
+  if (!THEMES.includes(name)) name = "aero";
+  document.documentElement.dataset.theme = name;
+  document.querySelectorAll("[data-theme-pick]").forEach(b => b.classList.toggle("on", b.dataset.themePick === name));
+  if (prefs.theme !== name) { prefs.theme = name; savePrefs(); }
+}
+setTheme(prefs.theme);
+document.querySelectorAll("[data-theme-pick]").forEach(b => b.onclick = () => setTheme(b.dataset.themePick));
+
 const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`; };
 const art = (a, size) => a?.url ? a.url.replace("{w}x{h}", `${size}x${size}`).replace("{f}", "jpg") : "";
 const status = t => { $("status").textContent = t; };
@@ -44,13 +55,14 @@ async function start() {
   lockQuality();
   music.addEventListener("playbackBitrateDidChange", lockQuality);
   music.volume = prefs.rememberVolume && prefs.volume != null ? prefs.volume : 0.8;
-  $("vol").value = music.volume; fill($("vol"));
+  $("vol").value = music.volume; fill($("vol")); showVolume();
 
   music.addEventListener("playbackStateDidChange", onState);
   music.addEventListener("playbackStateDidChange", () => report());
   music.addEventListener("nowPlayingItemDidChange", () => report());
   music.addEventListener("playbackDurationDidChange", () => report());
   music.addEventListener("playbackVolumeDidChange", () => report());
+  music.addEventListener("playbackVolumeDidChange", () => { if (Math.abs(music.volume - +vol.value) > 0.005) { vol.value = music.volume; fill(vol); } showVolume(); });
   setInterval(() => { if (music.isPlaying) report(); }, 5000);   // keeps the position honest
   music.addEventListener("nowPlayingItemDidChange", onItem);
   music.addEventListener("playbackTimeDidChange", onTime);
@@ -260,7 +272,7 @@ function show(list, msg, title = tabTitle()) {
   ul.innerHTML = "";
   list.forEach((t, i) => {
     const li = document.createElement("li");
-    li.style.animationDelay = `${Math.min(i, 14) * 45}ms`;
+    li.style.animationDelay = `${Math.min(i, 12) * 25}ms`;
     li.dataset.i = i;
     if (t.kind === "header") {
       li.className = "header";
@@ -333,6 +345,7 @@ function onItem() {
   for (const el of [$("title"), $("artist")]) { el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade"); }
   $("title").textContent = it.title || it.attributes?.name || "";
   $("artist").textContent = it.artistName || it.attributes?.artistName || "";
+  document.title = $("artist").textContent ? `${$("title").textContent} — ${$("artist").textContent}` : $("title").textContent || "Orchard";
   const big = art(it.attributes?.artwork || it.artwork, 600);
   const img = $("artImg");
   img.classList.remove("on");
@@ -358,9 +371,20 @@ function onTime() {
   if (seeking || !dur) return;
   const s = $("seek");
   s.max = dur; s.value = music.currentPlaybackTime || 0; fill(s);
-  $("cur").textContent = fmt(s.value);
-  $("dur").textContent = fmt(dur);
+  showTimes(+s.value, dur);
 }
+
+// The total under the seek bar, or the time left when you click it (remembered).
+function showTimes(cur, dur) {
+  $("cur").textContent = fmt(cur);
+  $("dur").textContent = prefs.timeLeft ? "-" + fmt(dur - Math.floor(cur)) : fmt(dur);
+}
+$("dur").onclick = () => {
+  prefs.timeLeft = !prefs.timeLeft; savePrefs();
+  $("dur").title = prefs.timeLeft ? "Click to show the length" : "Click to show time left";
+  showTimes(+seek.value, +seek.max || 0);
+};
+if (prefs.timeLeft) $("dur").title = "Click to show the length";
 
 function markPlaying() {
   const id = music?.nowPlayingItem && String(music.nowPlayingItem.id);
@@ -548,32 +572,125 @@ $("nudgeMore").onclick = () => nudge(0.1);
 showNudge();
 
 // ---- queue ----
+// Up Next can be rearranged by dragging, a song removed with its × (or the right-click menu), and the lot
+// cleared with Clear (click twice). The song that's playing is never touched, so playback carries on.
+let clearArmed = 0, clearTimer = 0, dragFrom = -1;
 function renderQueue() {
-  if (pane !== "queue" || !music) return;
+  if (pane !== "queue" || !music || dragFrom >= 0) return;   // redrawn when the drag ends
   const ul = $("queue");
   const list = music.queue?.items || [];
   const pos = music.nowPlayingItemIndex ?? music.queue?.position ?? 0;
   ul.innerHTML = "";
-  const head = text => { const li = document.createElement("li"); li.className = "head"; li.textContent = text; ul.appendChild(li); };
+  const head = text => { const li = document.createElement("li"); li.className = "head"; li.textContent = text; ul.appendChild(li); return li; };
   if (!list.length) { head("The queue is empty. Play something from the list."); return; }
   list.slice(pos, pos + 300).forEach((it, k) => {
     const i = pos + k;
     if (k === 0) head("Now Playing");
-    if (k === 1) head(`Up Next · ${list.length - pos - 1} song${list.length - pos - 1 === 1 ? "" : "s"}`);
+    if (k === 1) {
+      const n = list.length - pos - 1, h = head(`Up Next · ${n} song${n === 1 ? "" : "s"}`);
+      const b = document.createElement("button");
+      b.className = "clear" + (clearArmed > Date.now() ? " armed" : "");
+      b.textContent = clearArmed > Date.now() ? "Clear all?" : "Clear";
+      b.title = "Remove every song after this one";
+      h.appendChild(b);
+    }
     const li = document.createElement("li");
     li.dataset.i = i;
+    li.dataset.id = it.id;
     if (i === pos) li.classList.add("on");
+    else li.draggable = true;
     li.innerHTML = `<img alt=""><div><div class="t"></div><div class="a"></div></div><div class="d"></div>`;
     li.querySelector("img").src = art(it.attributes?.artwork || it.artwork, 80);
     li.querySelector(".t").textContent = it.title || it.attributes?.name || "";
     li.querySelector(".a").textContent = it.artistName || it.attributes?.artistName || "";
     li.querySelector(".d").textContent = it.playbackDuration ? fmt(it.playbackDuration / 1000) : "";
+    if (i !== pos) li.insertAdjacentHTML("beforeend", `<button class="x" title="Remove from Queue"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>`);
     ul.appendChild(li);
   });
 }
+
+// One edit at a time, each against the queue as it is by then.
+let queueEdits = Promise.resolve();
+function editQueue(plan, check, done) {
+  queueEdits = queueEdits.then(async () => {
+    if (!music) return;
+    try { if (await QueueEdit.apply(music, plan, check) && done) status(done); }
+    catch (e) { status("Couldn't change the queue: " + (e?.message || e)); }
+    renderQueue();
+  });
+  return queueEdits;
+}
+const queuePos = () => music.nowPlayingItemIndex ?? music.queue?.position ?? 0;
+const queueRow = li => [+li.dataset.i, li.dataset.id];
+const removeQueued = li => editQueue((n, pos) => QueueEdit.remove(n, pos, +li.dataset.i), queueRow(li), "Removed from the queue");
+const moveQueued = (li, to) => editQueue((n, pos) => QueueEdit.move(n, pos, +li.dataset.i, typeof to === "function" ? to(n, pos) : to), queueRow(li));
+function clearQueue() {
+  clearArmed = 0; clearTimeout(clearTimer);
+  queueJob++;   // stop a long list that's still being added in the background
+  editQueue((n, pos) => QueueEdit.clear(n, pos), null, "Cleared Up Next");
+}
+
 $("queue").addEventListener("click", e => {
+  if (e.target.closest(".clear")) {
+    if (clearArmed > Date.now()) { clearQueue(); return; }
+    clearArmed = Date.now() + 3000;
+    clearTimeout(clearTimer); clearTimer = setTimeout(() => { clearArmed = 0; renderQueue(); }, 3000);
+    renderQueue();
+    return;
+  }
   const li = e.target.closest("li[data-i]");
-  if (li) music.changeToMediaAtIndex(+li.dataset.i);
+  if (!li) return;
+  if (e.target.closest(".x")) { removeQueued(li); return; }
+  music.changeToMediaAtIndex(+li.dataset.i);
+});
+
+// drag and drop within Up Next
+const dropMarks = () => document.querySelectorAll("#queue .drop-before, #queue .drop-after").forEach(x => x.classList.remove("drop-before", "drop-after"));
+$("queue").addEventListener("dragstart", e => {
+  const li = e.target.closest("li[data-i]");
+  if (!li || !li.draggable) return;
+  dragFrom = +li.dataset.i;
+  li.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", li.dataset.id || "");
+});
+$("queue").addEventListener("dragover", e => {
+  const li = e.target.closest("li[data-i]");
+  if (dragFrom < 0 || !li) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = "move";
+  const r = li.getBoundingClientRect(), after = li.classList.contains("on") || e.clientY > r.top + r.height / 2;
+  dropMarks();
+  li.classList.add(after ? "drop-after" : "drop-before");
+});
+$("queue").addEventListener("drop", e => {
+  const li = e.target.closest("li[data-i]"), from = $("queue").querySelector(`li[data-i="${dragFrom}"]`);
+  dropMarks();
+  if (dragFrom < 0 || !li || !from) return;
+  e.preventDefault();
+  const target = +li.dataset.i, after = li.classList.contains("on") || e.clientY > li.getBoundingClientRect().top + li.getBoundingClientRect().height / 2;
+  dragFrom = -1;   // so the edit's redraw isn't held back
+  moveQueued(from, (n, pos) => QueueEdit.dropIndex(pos, +from.dataset.i, target, after));
+});
+$("queue").addEventListener("dragend", () => {
+  dragFrom = -1; dropMarks();
+  renderQueue();
+});
+
+// right-click a queued song
+$("queue").addEventListener("contextmenu", e => {
+  const li = e.target.closest("li[data-i]");
+  if (!li || !music) return;
+  e.preventDefault();
+  const i = +li.dataset.i, pos = queuePos(), last = (music.queue?.items?.length || 0) - 1;
+  menuItem = { kind: "queued", li };
+  fillMenu(i === pos ? [["qplay", "Play from Start"]] : [
+    ["qplay", "Play Now"], "-",
+    i > pos + 1 && ["qtop", "Move to Top"], i > pos + 1 && ["qup", "Move Up"],
+    i < last && ["qdown", "Move Down"], i < last && ["qbottom", "Move to Bottom"], "-",
+    ["qremove", "Remove from Queue"],
+  ]);
+  placeMenu(e.clientX, e.clientY);
 });
 
 let shuffleLit = false;   // on after we shuffled a list ourselves, even though MusicKit's own mode is off
@@ -668,6 +785,13 @@ const ACTIONS = {
     return `Added to your library: ${item.title}`;
   },
   async open(item) { await open(item); return ""; },
+  // songs in the queue (right-click in the Queue pane)
+  async qplay({ li }) { +li.dataset.i === queuePos() ? await music.seekToTime(0) : await music.changeToMediaAtIndex(+li.dataset.i); return ""; },
+  async qtop({ li }) { await moveQueued(li, (n, pos) => pos + 1); return ""; },
+  async qup({ li }) { await moveQueued(li, +li.dataset.i - 1); return ""; },
+  async qdown({ li }) { await moveQueued(li, +li.dataset.i + 1); return ""; },
+  async qbottom({ li }) { await moveQueued(li, n => n - 1); return ""; },
+  async qremove({ li }) { await removeQueued(li); return ""; },
 };
 
 async function addToPlaylist(item, playlist) {
@@ -708,8 +832,11 @@ function fillMenu(entries) {
 function placeMenu(x, y) {
   const m = $("menu");
   m.hidden = false;
-  m.style.left = Math.min(x, innerWidth - m.offsetWidth - 8) + "px";
-  m.style.top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8)) + "px";
+  const left = Math.min(x, innerWidth - m.offsetWidth - 8), top = Math.max(8, Math.min(y, innerHeight - m.offsetHeight - 8));
+  m.style.left = left + "px";
+  m.style.top = top + "px";
+  // grow out of the pointer, from whichever corner the menu was pushed to
+  m.style.transformOrigin = `${left < x ? "right" : "left"} ${top < y ? "bottom" : "top"}`;
 }
 
 $("list").addEventListener("contextmenu", e => {
@@ -779,15 +906,41 @@ $("next").onclick = () => music?.skipToNextItem();
 $("prev").onclick = () => music && (music.currentPlaybackTime > 3 ? music.seekToTime(0) : music.skipToPreviousItem());
 
 const seek = $("seek");
-seek.addEventListener("input", () => { seeking = true; fill(seek); $("cur").textContent = fmt(seek.value); });
+seek.addEventListener("input", () => { seeking = true; fill(seek); showTimes(+seek.value, +seek.max || 0); });
+// Hovering the seek bar shows the time you'd jump to.
+seek.addEventListener("mousemove", e => {
+  const r = seek.getBoundingClientRect(), x = Math.min(Math.max(e.clientX - r.left, 0), r.width), tip = $("seekTip");
+  const dur = music?.currentPlaybackDuration || 0;
+  tip.classList.toggle("on", dur > 0);
+  if (!dur) return;
+  tip.textContent = fmt(x / r.width * dur);
+  seek.parentElement.style.setProperty("--hover-x", x + "px");
+});
 seek.addEventListener("change", async () => { await music?.seekToTime(+seek.value); seeking = false; report({ seeked: true }); });
 
 const vol = $("vol");
-vol.addEventListener("input", () => {
-  fill(vol);
-  if (music) music.volume = +vol.value;
-  prefs.volume = +vol.value; savePrefs();
-});
+// Volume from the slider, the wheel, the keyboard or the mute button. Muting isn't remembered as the
+// volume, so the next launch doesn't start silent; unmuting goes back to where it was.
+let unmuted = null;
+function setVolume(v) {
+  v = Math.round(Math.min(Math.max(v, 0), 1) * 100) / 100;
+  vol.value = v; fill(vol);
+  if (music) music.volume = v;
+  if (v > 0) { unmuted = null; prefs.volume = v; savePrefs(); }
+  showVolume();
+}
+function showVolume() {
+  const muted = +vol.value === 0;
+  $("volIcon").classList.toggle("muted", muted);
+  $("volIcon").title = muted ? "Unmute (M)" : "Mute (M)";
+}
+function toggleMute() {
+  if (+vol.value > 0) { unmuted = +vol.value; vol.value = 0; fill(vol); if (music) music.volume = 0; showVolume(); }
+  else setVolume(unmuted || prefs.volume || 0.8);
+}
+vol.addEventListener("input", () => setVolume(+vol.value));
+$("volIcon").onclick = toggleMute;
+$("volIcon").parentElement.addEventListener("wheel", e => { e.preventDefault(); setVolume(+vol.value - Math.sign(e.deltaY) * 0.05); }, { passive: false });
 
 document.querySelectorAll("[data-win]").forEach(b => b.onclick = () => glass.window(b.dataset.win));
 
@@ -819,12 +972,40 @@ $("wordSync").checked = prefs.wordSync;
 $("wordSync").onchange = e => { prefs.wordSync = e.target.checked; savePrefs(); if (pane === "lyrics") loadLyrics(true); };
 
 document.addEventListener("keydown", e => {
-  if (e.key === "Escape") { $("menu").hidden = true; if (!overlay.hidden) toggleSettings(false); else back(); }
-  const typing = document.activeElement === $("q");
-  if (!typing && (e.key === "l" || e.key === "y")) setPane(pane === "lyrics" ? "now" : "lyrics");
-  if (!typing && e.key === "q") setPane(pane === "queue" ? "now" : "queue");
-  if (e.key === "Backspace" && document.activeElement !== $("q")) back();
-  if (e.code === "Space" && document.activeElement !== $("q")) { e.preventDefault(); $("play").click(); }
+  const el = document.activeElement;
+  // Any text box counts (the search, the Musixmatch key), so typing there never fires a shortcut.
+  const typing = !!el && (el.isContentEditable || el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["range", "checkbox"].includes(el.type)));
+  const slider = el?.type === "range";   // sliders take the arrow keys themselves
+  if (e.key === "Escape") {
+    $("menu").hidden = true;
+    if (typing) el.blur(); else if (!overlay.hidden) toggleSettings(false); else back();
+    return;
+  }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); toggleSettings(false); $("q").focus(); $("q").select(); return; }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  switch (key) {
+    case "/": e.preventDefault(); toggleSettings(false); $("q").focus(); $("q").select(); break;
+    case "l": case "y": setPane(pane === "lyrics" ? "now" : "lyrics"); break;
+    case "q": setPane(pane === "queue" ? "now" : "queue"); break;
+    case "m": toggleMute(); break;
+    case "Backspace": back(); break;
+    case " ": e.preventDefault(); $("play").click(); break;
+    case "ArrowLeft": case "ArrowRight": {
+      if (slider || !music?.nowPlayingItem) return;
+      e.preventDefault();
+      const d = key === "ArrowRight" ? 1 : -1;
+      if (e.shiftKey) { d > 0 ? $("next").click() : music.skipToPreviousItem(); return; }
+      const t = Math.min(Math.max((music.currentPlaybackTime || 0) + d * 5, 0), Math.max((music.currentPlaybackDuration || 0) - 1, 0));
+      music.seekToTime(t).then(() => report({ seeked: true }));
+      break;
+    }
+    case "ArrowUp": case "ArrowDown":
+      if (slider || el?.closest?.("#list, #queue, #lyrics, #sheet, #menu")) return;   // let lists scroll
+      e.preventDefault();
+      setVolume(+vol.value + (key === "ArrowUp" ? 0.05 : -0.05));
+      break;
+  }
 });
 
 if ("mediaSession" in navigator) {
@@ -870,7 +1051,7 @@ glass.onMpris(async ({ action, value }) => {
     case "previous": $("prev").click(); break;
     case "seek": await music.seekToTime(Math.max(0, value)); report({ seeked: true }); return;
     case "seekby": await music.seekToTime(Math.max(0, playTime() + value)); report({ seeked: true }); return;
-    case "volume": music.volume = value; vol.value = value; fill(vol); prefs.volume = value; savePrefs(); break;
+    case "volume": setVolume(value); break;
   }
   report();
 });
