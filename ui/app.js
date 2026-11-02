@@ -475,10 +475,17 @@ function renderLyrics() {
 }
 
 // MusicKit's currentPlaybackTime is floored to whole seconds, far too coarse for lyrics.
-// The <audio> element MusicKit plays through has the real position.
+// The <audio> element MusicKit plays through has the real position. When a song follows on by itself,
+// MusicKit can move to another element and leave the old one sitting at the end of the last song, so
+// only an element that agrees with MusicKit's own (floored) time is believed.
 function playTime() {
-  const a = document.getElementById("apple-music-player");
-  return a && Number.isFinite(a.currentTime) && a.currentSrc ? a.currentTime : music.currentPlaybackTime || 0;
+  const coarse = music.currentPlaybackTime || 0;
+  let best = null;
+  for (const a of document.querySelectorAll("audio, video")) {
+    if (!a.currentSrc || !Number.isFinite(a.currentTime) || Math.abs(a.currentTime - coarse) > 1.5) continue;
+    if (!best || (best.paused && !a.paused)) best = a;
+  }
+  return best ? best.currentTime : coarse;
 }
 
 // Runs every frame while the lyrics are on screen.
