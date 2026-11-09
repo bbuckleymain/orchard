@@ -154,9 +154,11 @@ const Lyrics = (() => {
       }
     }
     if (found?.synced) found.lines = withRests(found.lines);
-    cache.set(key, found);
+    if (found) cache.set(key, found);   // a miss may be a dropped connection, so it's tried again next time
     return found;
   }
 
   return { find, parseTTML, parseLRC, withRests };
 })();
+
+if (typeof module !== "undefined") module.exports = Lyrics;

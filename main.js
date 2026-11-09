@@ -19,17 +19,16 @@ const store = path.join(app.getPath("userData"), "account.bin");
 let win = null, port = 0;
 
 // ---- saved Apple Music sign-in (encrypted with the system keyring when available) ----
+// Without a keyring nothing is written to disk: the sign-in lasts until Orchard closes.
+let memAccount = null;
 function loadAccount() {
-  try {
-    const raw = fs.readFileSync(store);
-    const json = safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString();
-    return JSON.parse(json);
-  } catch { return null; }
+  if (memAccount) return memAccount;
+  try { return JSON.parse(safeStorage.decryptString(fs.readFileSync(store))); } catch { return null; }
 }
 function saveAccount(acc) {
+  if (!safeStorage.isEncryptionAvailable()) { memAccount = acc; return; }
   fs.mkdirSync(path.dirname(store), { recursive: true });
-  const json = JSON.stringify(acc);
-  fs.writeFileSync(store, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : json, { mode: 0o600 });
+  fs.writeFileSync(store, safeStorage.encryptString(JSON.stringify(acc)), { mode: 0o600 });
 }
 
 // ---- developer token: read from the music.apple.com web player, like GlassPlayer does for SoundCloud ----
@@ -37,11 +36,12 @@ let devToken = null;
 async function token(refresh = false) {
   if (process.env.APPLE_MUSIC_DEVELOPER_TOKEN) return process.env.APPLE_MUSIC_DEVELOPER_TOKEN;
   if (devToken && !refresh) return devToken;
-  const html = await (await fetch(WEB + "/us/browse", { headers: { "User-Agent": UA } })).text();
+  const get = url => fetch(url, { headers: { "User-Agent": UA }, signal: AbortSignal.timeout(10000) }).then(r => r.text());
+  const html = await get(WEB + "/us/browse");
   const scripts = [...html.matchAll(/<script[^>]+src="(\/assets\/[^"]+\.js)"/g)].map(m => WEB + m[1]);
   for (const url of scripts) {
     try {
-      const js = await (await fetch(url, { headers: { "User-Agent": UA } })).text();
+      const js = await get(url);
       for (const [jwt] of js.matchAll(/eyJ[\w-]{10,}\.eyJ[\w-]+\.[\w-]+/g)) {
         try { if (JSON.parse(Buffer.from(jwt.split(".")[0], "base64url")).alg === "ES256") return (devToken = jwt); } catch {}
       }
@@ -55,7 +55,9 @@ const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascrip
 function serve() {
   const root = path.join(__dirname, "ui");
   const server = http.createServer((req, res) => {
-    const file = path.join(root, path.normalize(decodeURIComponent(req.url.split("?")[0])).replace(/^(\.\.[/\\])+/, ""));
+    let file;
+    try { file = path.join(root, path.normalize(decodeURIComponent(req.url.split("?")[0])).replace(/^(\.\.[/\\])+/, "")); }
+    catch { res.writeHead(400).end(); return; }   // a malformed %-escape or null byte
     if (!file.startsWith(root)) { res.writeHead(403).end(); return; }
     fs.readFile(file.endsWith(path.sep) ? path.join(file, "index.html") : file, (err, data) => {
       if (err) { res.writeHead(404).end(); return; }
@@ -83,6 +85,7 @@ function createWindow() {
   });
   win.webContents.setUserAgent(UA);
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(`http://127.0.0.1:${port}/`)) e.preventDefault(); });
   win.once("ready-to-show", () => win.show());
   win.loadURL(`http://127.0.0.1:${port}/index.html`);
 }
@@ -125,6 +128,7 @@ function signIn() {
 }
 
 async function signOut() {
+  memAccount = null;
   try { fs.unlinkSync(store); } catch {}
   await session.fromPartition("persist:apple-signin").clearStorageData();
 }
@@ -138,16 +142,16 @@ const mxmStore = path.join(app.getPath("userData"), "musixmatch.bin");
 function loadMusixmatchKey() {
   try {
     const raw = fs.readFileSync(mxmStore);
-    lyricsSources.setMusixmatchKey(safeStorage.isEncryptionAvailable() ? safeStorage.decryptString(raw) : raw.toString());
+    lyricsSources.setMusixmatchKey(safeStorage.decryptString(raw));
   } catch {}
 }
 ipcMain.handle("musixmatch-status", () => lyricsSources.musixmatchStatus());
 ipcMain.handle("musixmatch-key", (_e, key) => {
   key = String(key || "").trim();
   if (!key) { try { fs.unlinkSync(mxmStore); } catch {} }
-  else {
+  else if (safeStorage.isEncryptionAvailable()) {   // no keyring: kept for this run only
     fs.mkdirSync(path.dirname(mxmStore), { recursive: true });
-    fs.writeFileSync(mxmStore, safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(key) : key, { mode: 0o600 });
+    fs.writeFileSync(mxmStore, safeStorage.encryptString(key), { mode: 0o600 });
   }
   lyricsSources.setMusixmatchKey(key);
   return lyricsSources.musixmatchStatus();

@@ -56,11 +56,15 @@ class Player extends Interface {
     const s = this.state;
     return us(s.position + (s.status === "Playing" ? (Date.now() - s.at) / 1000 : 0));
   }
+  trackPath() {
+    const t = this.state.track;
+    return t ? `/io/github/bbuckleymain/orchard/track/${String(t.id).replace(/[^A-Za-z0-9_]/g, "_") || "0"}` : NO_TRACK;
+  }
   get Metadata() {
     const t = this.state.track;
     if (!t) return { "mpris:trackid": new Variant("o", NO_TRACK) };
     const m = {
-      "mpris:trackid": new Variant("o", `/io/github/bbuckleymain/orchard/track/${String(t.id).replace(/[^A-Za-z0-9_]/g, "_") || "0"}`),
+      "mpris:trackid": new Variant("o", this.trackPath()),
       "xesam:title": new Variant("s", t.title || ""),
       "xesam:artist": new Variant("as", [t.artist || ""]),
     };
@@ -86,7 +90,7 @@ class Player extends Interface {
   Stop() { this.send({ action: "pause" }); }
   Play() { this.send({ action: "play" }); }
   Seek(offset) { this.send({ action: "seekby", value: Number(offset) / 1e6 }); }
-  SetPosition(trackId, position) { this.send({ action: "seek", value: Number(position) / 1e6 }); }
+  SetPosition(trackId, position) { if (trackId !== this.trackPath()) return; this.send({ action: "seek", value: Number(position) / 1e6 }); }
   OpenUri() {}
   Seeked(position) { return position; }
 }
