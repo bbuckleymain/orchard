@@ -35,13 +35,14 @@ async function ask(method, key, params) {
 const wordsOf = text => new Set((String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(w => w.length > 1));
 const overlaps = (a, b) => [...a].some(w => b.has(w));
 
-function fits(track, artist, title, duration) {
-  const wanted = wordsOf(title);
-  if (wanted.size && !overlaps(wanted, wordsOf(track.track_name))) return false;
+// Does a result from any lyrics source look like the song that's playing? Lengths are in seconds.
+function matches(foundTitle, foundArtist, foundLength, title, artist, duration) {
+  const wanted = wordsOf(title), found = wordsOf(foundTitle);
+  if (!wanted.size || !overlaps(wanted, found)) return false;
+  if ([...wanted].filter(w => !found.has(w)).length > wanted.size / 2) return false;
   const who = wordsOf(artist);
-  if (who.size && !overlaps(who, wordsOf(track.artist_name))) return false;
-  const length = +(track.track_length || 0);
-  return !(duration && length && Math.abs(length - duration) > CLOSE_ENOUGH);
+  if (who.size && !overlaps(who, wordsOf(foundArtist))) return false;
+  return !(duration && foundLength && Math.abs(foundLength - duration) > CLOSE_ENOUGH);
 }
 
 function stamp(seconds) {
@@ -86,7 +87,7 @@ async function fetchLyrics(key, artist, title, duration) {
   if (duration) params.q_duration = Math.floor(duration);
   const found = await ask("matcher.track.get", key, params);
   const track = found?.track;
-  if (!track || !fits(track, artist, title, duration)) return null;
+  if (!track || !matches(track.track_name, track.artist_name, +(track.track_length || 0), title, artist, duration)) return null;
   const ident = track.commontrack_id ? { commontrack_id: track.commontrack_id } : { track_id: track.track_id };
   if (track.has_richsync) {
     const rich = await ask("track.richsync.get", key, ident);
@@ -101,4 +102,4 @@ async function fetchLyrics(key, artist, title, duration) {
   return null;
 }
 
-module.exports = { fetchLyrics, richsyncToLrc, PlanError };
+module.exports = { fetchLyrics, richsyncToLrc, matches, PlanError };

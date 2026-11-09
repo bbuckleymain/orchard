@@ -58,15 +58,11 @@ async function start() {
   $("vol").value = music.volume; fill($("vol")); showVolume();
 
   music.addEventListener("playbackStateDidChange", onState);
-  music.addEventListener("playbackStateDidChange", () => report());
-  music.addEventListener("nowPlayingItemDidChange", () => report());
-  music.addEventListener("playbackDurationDidChange", () => report());
-  music.addEventListener("playbackVolumeDidChange", () => report());
-  music.addEventListener("playbackVolumeDidChange", () => { if (Math.abs(music.volume - +vol.value) > 0.005) { vol.value = music.volume; fill(vol); } showVolume(); });
+  music.addEventListener("playbackVolumeDidChange", () => { report(); if (Math.abs(music.volume - +vol.value) > 0.005) { vol.value = music.volume; fill(vol); } showVolume(); });
   setInterval(() => { if (music.isPlaying) report(); }, 5000);   // keeps the position honest
   music.addEventListener("nowPlayingItemDidChange", onItem);
   music.addEventListener("playbackTimeDidChange", onTime);
-  music.addEventListener("playbackDurationDidChange", onTime);
+  music.addEventListener("playbackDurationDidChange", () => { report(); onTime(); });
   music.addEventListener("authorizationStatusDidChange", refreshAccount);
   music.addEventListener("queueItemsDidChange", renderQueue);
   music.addEventListener("queuePositionDidChange", renderQueue);
@@ -126,6 +122,7 @@ async function paged(path, params = {}, max = 500) {
       urls.push(u);
     }
     // Straight to Apple, not through music.api, which is noticeably slower when many requests are in flight.
+    if (total > max) out.note = `Showing the first ${max} of ${total}.`;
     for (let i = 0; i < urls.length; i += 10) {
       const pages = await Promise.all(urls.slice(i, i + 10).map(u => amp("GET", u).then(r => r?.data || [])));
       for (const p of pages) out.push(...p.map(toItem).filter(Boolean));
@@ -137,6 +134,7 @@ async function paged(path, params = {}, max = 500) {
     out.push(...(r.data.data || []).map(toItem).filter(Boolean));
     next = r.data.next;
   }
+  if (next) out.note = `Showing the first ${out.length}; there are more.`;
   return out;
 }
 
@@ -229,14 +227,17 @@ async function tracksOf(item) {
 }
 
 // Album or playlist -> its songs, artist -> top songs and albums, library category -> its contents.
+let loadJob = 0;   // a slower, older answer must not replace a newer screen
 async function open(item) {
   status("Loading…");
+  const job = ++loadJob;
   try {
     let list;
     if (item.kind === "category") list = await libraryList(item.id);
     else if (item.kind === "artist") list = await artistPage(item);
     else list = await tracksOf(item);
-    stack.push({ title: crumbTitle(), items, scroll: $("list").scrollTop });
+    if (job !== loadJob) return;
+    stack.push({ title: currentTitle, items, scroll: $("list").scrollTop });
     show(list, undefined, item.title);
   } catch (e) { status(e?.message || String(e)); }
 }
@@ -250,7 +251,6 @@ function back() {
 
 const tabTitle = () => ({ home: "For You", search: "", recent: "", albums: "Albums", library: "Library" })[view];
 let currentTitle = "";
-const crumbTitle = () => currentTitle;
 
 const CAT_ICONS = {
   playlists: '<svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h7"/><path class="fill" d="M17 9v7.2a2.5 2.5 0 1 0 2 2.4V11h2V9z"/></svg>',
@@ -296,17 +296,18 @@ function show(list, msg, title = tabTitle()) {
   });
   ul.scrollTop = 0;
   markPlaying();
-  status(msg ?? (list.length ? "" : view === "search" ? "No results. Try different words." : "Nothing here yet."));
+  status(msg ?? list.note ?? (list.length ? "" : view === "search" ? "No results. Try different words." : "Nothing here yet."));
 }
 
 async function load() {
   if (!music) return;
   stack = [];
+  const job = ++loadJob, v = view;
   const q = $("q").value.trim();
-  if (view === "search" && !q) { show([], "Search for a song or artist."); return; }
-  status(view === "search" ? "Searching…" : "Loading…");
-  try { show(view === "search" ? await search(q) : await tabs[view]()); }
-  catch (e) { show([], (view === "search" ? "Search failed: " : "") + (e?.message || e)); }
+  if (v === "search" && !q) { show([], "Search for a song or artist."); return; }
+  status(v === "search" ? "Searching…" : "Loading…");
+  try { const list = v === "search" ? await search(q) : await tabs[v](); if (job === loadJob) show(list); }
+  catch (e) { if (job === loadJob) show([], (v === "search" ? "Search failed: " : "") + (e?.message || e)); }
 }
 
 // ---- playback ----
@@ -333,6 +334,7 @@ async function playStation(item) {
 }
 
 function onState() {
+  report();
   const playing = music.isPlaying;
   $("playIcon").setAttribute("d", playing ? "M6 4h4v16H6zM14 4h4v16h-4z" : "M7 4v16l13-8z");
   $("play").title = playing ? "Pause" : "Play";
@@ -340,6 +342,7 @@ function onState() {
 }
 
 function onItem() {
+  report();
   const it = music.nowPlayingItem;
   if (!it) return;
   for (const el of [$("title"), $("artist")]) { el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade"); }
@@ -551,9 +554,9 @@ function tick() {
     spans[k]?.style.setProperty("--p", p.toFixed(1));
     spans[k]?.classList.toggle("sung", p > 0);
   });
-  const spans = [...el.querySelectorAll(":scope > .w")];
-  fillWords(line.words, spans, line.end);
-  if (line.bg?.length) fillWords(line.bg, [...el.querySelectorAll(".bgv .w")], line.end);
+  el._spans ??= [...el.querySelectorAll(":scope > .w")];
+  fillWords(line.words, el._spans, line.end);
+  if (line.bg?.length) fillWords(line.bg, el._bgSpans ??= [...el.querySelectorAll(".bgv .w")], line.end);
 }
 
 $("lyrics").addEventListener("wheel", () => { userScrollUntil = Date.now() + 3500; }, { passive: true });
@@ -718,12 +721,14 @@ $("repeat").onclick = () => { if (music) { music.repeatMode = { 0: 2, 2: 1, 1: 0
 
 // ---- right-click menu ----
 async function amp(method, path, body) {
-  const r = await fetch("https://amp-api.music.apple.com" + path, {
+  const send = () => fetch("https://amp-api.music.apple.com" + path, {
     method,
     headers: { Authorization: "Bearer " + music.developerToken, "media-user-token": music.musicUserToken || "",
                ...(body ? { "Content-Type": "application/json" } : {}) },
     body: body ? JSON.stringify(body) : undefined,
   });
+  let r = await send();
+  if (r.status === 429) { await new Promise(done => setTimeout(done, 1500)); r = await send(); }   // asked too fast: once more
   if (!r.ok) throw new Error(`Apple Music answered ${r.status}`);
   return r.status === 200 || r.status === 201 ? r.json().catch(() => null) : null;
 }
@@ -872,7 +877,6 @@ $("menu").addEventListener("click", async e => {
     if (act === "open" || act === "library" || act === "topl") status("Working…");
     const msg = act === "topl" ? await addToPlaylist(item, editable.find(p => p.id === b.dataset.pl)) : await ACTIONS[act](item);
     if (msg) status(msg);
-    if (act === "library" || act === "topl") editable = act === "topl" ? editable : null;
   } catch (err) { status("Couldn't do that: " + (err?.message || err)); }
   renderQueue();
 });

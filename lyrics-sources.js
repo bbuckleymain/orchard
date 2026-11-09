@@ -10,7 +10,7 @@ async function ask(url, headers) {
   } catch { return null; }
 }
 
-const wordsOf = text => new Set((String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(w => w.length > 1));
+const musixmatch = require("./musixmatch");
 const stamp = ms => {
   const cs = Math.floor(Math.max(0, ms) / 10), s = Math.floor(cs / 100);
   return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}.${String(cs % 100).padStart(2, "0")}`;
@@ -48,21 +48,10 @@ function neteaseToLrc(yrc) {
   return out.join("\n");
 }
 
-function fits(song, title, artist, duration) {
-  const wanted = wordsOf(title), found = wordsOf(song.name);
-  if (!wanted.size || ![...wanted].some(w => found.has(w))) return false;
-  if ([...wanted].filter(w => !found.has(w)).length > wanted.size / 2) return false;
-  const singers = wordsOf((song.artists || []).map(a => a.name).join(" "));
-  const want = wordsOf(artist);
-  if (want.size && ![...want].some(w => singers.has(w))) return false;
-  const theirs = (song.duration || 0) / 1000;
-  return !(duration && theirs && Math.abs(theirs - duration) > 8);
-}
-
 async function netease(artist, title, duration) {
   const term = `${title} ${artist}`.replace(/\s+/g, " ").trim();
   const found = await ask(`https://music.163.com/api/search/get?type=1&limit=6&s=${encodeURIComponent(term)}`, NETEASE);
-  const song = (found?.result?.songs || []).find(s => fits(s, title, artist, duration));
+  const song = (found?.result?.songs || []).find(s => musixmatch.matches(s.name, (s.artists || []).map(a => a.name).join(" "), (s.duration || 0) / 1000, title, artist, duration));
   if (!song) return "";
   const lyric = await ask(`https://music.163.com/api/song/lyric?id=${song.id}&lv=1&kv=1&tv=1&yv=1`, NETEASE);
   return neteaseToLrc(lyric?.yrc?.lyric);
@@ -89,7 +78,6 @@ async function lrclib(artist, title, album, duration) {
 }
 
 // Musixmatch, when you've given a key: stops being asked once it says the key or plan is the problem.
-const musixmatch = require("./musixmatch");
 const mxm = { key: "", status: "" };
 function setMusixmatchKey(key) { mxm.key = String(key || "").trim(); mxm.status = ""; }
 const musixmatchStatus = () => ({ hasKey: !!mxm.key, status: mxm.status });
@@ -124,4 +112,4 @@ async function external({ artist, title, album, duration, wordSync }) {
   return null;
 }
 
-module.exports = { external, setMusixmatchKey, musixmatchStatus };
+module.exports = { external, setMusixmatchKey, musixmatchStatus, neteaseToLrc };
