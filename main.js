@@ -173,6 +173,11 @@ ipcMain.handle("lastfm-log-add", (_e, entries) => {
   for (const [key, id] of entries) log[key] = id;
   fs.writeFileSync(favLog, JSON.stringify(log));
 });
+ipcMain.handle("lastfm-log-forget", (_e, ids) => {   // a song that's no longer a favourite can be imported again
+  const gone = new Set(ids.map(String)), log = readFavLog();
+  for (const k of Object.keys(log)) if (gone.has(String(log[k]))) delete log[k];
+  fs.writeFileSync(favLog, JSON.stringify(log));
+});
 ipcMain.handle("lastfm-log-clear", () => fs.writeFileSync(favLog, "{}"));
 
 ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {

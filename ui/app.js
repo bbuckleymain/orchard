@@ -358,6 +358,7 @@ function onItem() {
   document.querySelectorAll(".miniTitle").forEach(m => m.textContent = $("title").textContent);
   document.querySelectorAll(".miniArtist").forEach(m => m.textContent = $("artist").textContent);
   if (pane === "lyrics") loadLyrics();
+  refreshHeart();
   renderQueue();
   if ("mediaSession" in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: $("title").textContent, artist: $("artist").textContent, album: it.albumName || "", artwork: big ? [{ src: big, sizes: "600x600" }] : [] });
@@ -414,6 +415,7 @@ function refreshAccount() {
     ? `Signed in${music.storefrontCountryCode ? ` (${music.storefrontCountryCode.toUpperCase()})` : ""}. Streaming High Quality, 256 kbps AAC.`
     : "Sign in with your Apple ID to play full songs. Needs an Apple Music subscription.";
   $("accAction").textContent = on ? "Sign out" : "Connect";
+  refreshHeart();
 }
 
 $("accAction").onclick = async () => {
@@ -691,9 +693,11 @@ $("queue").addEventListener("contextmenu", e => {
     ["qplay", "Play Now"], "-",
     i > pos + 1 && ["qtop", "Move to Top"], i > pos + 1 && ["qup", "Move Up"],
     i < last && ["qdown", "Move Down"], i < last && ["qbottom", "Move to Bottom"], "-",
-    ["qremove", "Remove from Queue"],
+    ["qremove", "Remove from Queue"], "-",
+    music.isAuthorized && ["fav", "Add to Favourites"],
   ]);
   placeMenu(e.clientX, e.clientY);
+  labelFav(menuItem);
 });
 
 let shuffleLit = false;   // on after we shuffled a list ourselves, even though MusicKit's own mode is off
@@ -793,6 +797,8 @@ const ACTIONS = {
     return `Added to your library: ${item.title}`;
   },
   async open(item) { await open(item); return ""; },
+  async fav(item) { await setFavourite(favTargets(favSource(item)), true); refreshHeart(); return "Added to favourites"; },
+  async unfav(item) { await setFavourite(favTargets(favSource(item)), false); refreshHeart(); return "Removed from favourites"; },
   // songs in the queue (right-click in the Queue pane)
   async qplay({ li }) { +li.dataset.i === queuePos() ? await music.seekToTime(0) : await music.changeToMediaAtIndex(+li.dataset.i); return ""; },
   async qtop({ li }) { await moveQueued(li, (n, pos) => pos + 1); return ""; },
@@ -814,7 +820,7 @@ function menuEntries(item) {
   const canAdd = signedIn && !item.lib && ["song", "album", "playlist"].includes(item.kind);
   switch (item.kind) {
     case "song": return [["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
-                         canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
+                         canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"], signedIn && ["fav", "Add to Favourites"]];
     case "album":
     case "playlist": return [["play", "Play"], ["shuffle", "Shuffle"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
                              canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
@@ -822,6 +828,59 @@ function menuEntries(item) {
     case "category": return item.id === "songs" ? [["shuffle", "Shuffle All"], ["play", "Play All"]] : [];
     default: return [];
   }
+}
+
+// ---- favourites: Apple's "love" rating, from the heart button and the right-click menu ----
+// A song can carry the rating under its catalog id or, if it is in your library, its library id, so both are checked.
+const fromMedia = it => ({ id: String(it.id), lib: /^i\./.test(it.id), catalogId: it.attributes?.playParams?.catalogId });
+const favSource = item => item.kind === "queued" ? fromMedia(music.queue.items[+item.li.dataset.i]) : item;
+function favTargets({ id, lib, catalogId }) {
+  const targets = [];
+  if (catalogId) targets.push(["songs", catalogId]);
+  if (lib) targets.push(["library-songs", id]); else if (!catalogId) targets.push(["songs", id]);
+  return targets;
+}
+async function isFavourite(targets) {
+  for (const [path, id] of targets) {
+    const r = await amp("GET", `/v1/me/ratings/${path}?ids=${encodeURIComponent(id)}`);
+    if (r?.data?.some(x => x.attributes?.value === 1)) return true;
+  }
+  return false;
+}
+async function setFavourite(targets, on) {
+  if (on) { const [path, id] = targets[0]; await amp("PUT", `/v1/me/ratings/${path}/${id}`, { type: "rating", attributes: { value: 1 } }); return; }
+  for (const [path, id] of targets) {
+    try { await amp("DELETE", `/v1/me/ratings/${path}/${id}`); }
+    catch (e) { if (!/ 404$/.test(e.message)) throw e; }   // a 404 only means that id had no rating
+  }
+  await glass.lastfmLogForget(targets.map(t => t[1]));
+}
+
+let heartFor = null;
+async function refreshHeart() {
+  const it = music?.nowPlayingItem, b = $("fav");
+  b.classList.remove("on");
+  b.disabled = !it || !music.isAuthorized;
+  if (b.disabled) return;
+  heartFor = it.id;
+  try { const on = await isFavourite(favTargets(fromMedia(it))); if (heartFor === it.id) b.classList.toggle("on", on); } catch {}
+}
+$("fav").onclick = async () => {
+  const it = music?.nowPlayingItem, b = $("fav");
+  if (!it || b.disabled) return;
+  const on = !b.classList.contains("on");
+  b.classList.toggle("on", on);   // shown at once, put back if Apple refuses
+  try { await setFavourite(favTargets(fromMedia(it)), on); status(on ? "Added to favourites" : "Removed from favourites"); }
+  catch (e) { b.classList.toggle("on", !on); status("Couldn't change that: " + (e?.message || e)); }
+};
+
+// The menu says "Add to Favourites" at first, and "Remove from Favourites" once it knows the song is one.
+function labelFav(item) {
+  const b = $("menu").querySelector('[data-act="fav"]');
+  if (!b || !music?.isAuthorized) return;
+  isFavourite(favTargets(favSource(item))).then(on => {
+    if (on && menuItem === item && b.isConnected) { b.dataset.act = "unfav"; b.textContent = "Remove from Favourites"; }
+  }).catch(() => {});
 }
 
 let menuItem = null;
@@ -856,6 +915,7 @@ $("list").addEventListener("contextmenu", e => {
   menuItem = item;
   fillMenu(entries);
   placeMenu(e.clientX, e.clientY);
+  labelFav(item);
 });
 document.addEventListener("click", () => { $("menu").hidden = true; });
 
