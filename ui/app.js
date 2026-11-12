@@ -103,7 +103,7 @@ function toItem(s) {
   if (s.type.endsWith("playlists")) return { kind: "playlist", id: s.id, lib, canEdit: !!a.canEdit, title: a.name, artist: a.curatorName || "Playlist", art: artwork };
   if (s.type === "stations") return { kind: "station", id: s.id, title: a.name, artist: "Station", art: artwork };
   if (!a.playParams) return null; // not streamable here
-  return { kind: "song", id: s.id, lib, playId: a.playParams.id, title: a.name, artist: a.artistName, art: artwork, ms: a.durationInMillis || 0 };
+  return { kind: "song", id: s.id, lib, playId: a.playParams.id, catalogId: a.playParams.catalogId, title: a.name, artist: a.artistName, art: artwork, ms: a.durationInMillis || 0 };
 }
 
 // Every page of a list. When Apple says how many there are, the remaining pages are fetched
@@ -972,6 +972,99 @@ async function showMxm(st) {
 }
 $("mxmSave").onclick = async () => { const st = await glass.setMusixmatchKey($("mxmKey").value); $("mxmKey").value = ""; showMxm(st); };
 showMxm();
+
+// ---- favourite your most-played Last.fm songs (the matching happens in the main process, see lastfm.js) ----
+let lfm = null;   // what the last Preview found and still has to add
+const lfmNote = text => { $("lfmStatus").textContent = text; };
+const lfmError = e => lfmNote("Couldn't do that: " + String(e?.message || e).replace(/^.*Error: /, ""));
+glass.lastfmStatus().then(has => { if (has) $("lfmKey").placeholder = "Key saved. Paste a new one to replace it"; });
+$("lfmKeySave").onclick = async () => { const has = await glass.setLastfmKey($("lfmKey").value); $("lfmKey").value = ""; lfmNote(has ? "Last.fm key saved." : "Last.fm key removed."); };
+$("lfmUser").value = prefs.lastfmUser || "";
+
+// Songs you've already favourited are left out, so running this twice adds nothing the second time.
+async function notFavourited(songs) {
+  const done = new Set();
+  for (let i = 0; i < songs.length; i += 50) {
+    const r = await amp("GET", `/v1/me/ratings/songs?ids=${songs.slice(i, i + 50).map(s => s.id).join(",")}`);
+    for (const x of r?.data || []) if (x.attributes?.value === 1) done.add(x.id);
+  }
+  return songs.filter(s => !done.has(s.id));
+}
+
+// Removing your current favourites (run this before Preview). Apple has no "list my favourites" call, so every library
+// song is checked, by its library id and by its catalog id. A favourite on a song that isn't in your library isn't found.
+async function currentFavourites() {
+  const songs = await paged("/v1/me/library/songs", { limit: 100, include: "catalog" }, 20000);
+  const found = [];
+  for (const [kind, path, ids] of [["library-songs", "library-songs", songs.map(s => s.id)],
+                                    ["songs", "songs", [...new Set(songs.map(s => s.catalogId).filter(Boolean))]]]) {
+    for (let i = 0; i < ids.length; i += 50) {
+      const r = await amp("GET", `/v1/me/ratings/${path}?ids=${ids.slice(i, i + 50).join(",")}`);
+      for (const x of r?.data || []) if (x.attributes?.value === 1) found.push({ path: kind, id: x.id });
+    }
+  }
+  return found;
+}
+
+let clearFavs = null, clearFavsTimer = 0;
+$("lfmClear").onclick = async () => {
+  const b = $("lfmClear");
+  if (!music?.isAuthorized) { lfmNote("Sign in to Apple Music first (Account, above)."); return; }
+  if (clearFavs) {                                   // second click: do it
+    const todo = clearFavs; clearFavs = null; clearTimeout(clearFavsTimer);
+    b.disabled = true;
+    try {
+      for (const [n, f] of todo.entries()) { await amp("DELETE", `/v1/me/ratings/${f.path}/${f.id}`); if (n % 10 === 9) lfmNote(`Removed ${n + 1} of ${todo.length}…`); }
+      lfmNote(`Removed ${todo.length} favourites. Run Preview next.`);
+    } catch (e) { lfmError(e); }
+    b.disabled = false; b.textContent = "Remove my current favourites…";
+    return;
+  }
+  b.disabled = true; lfmNote("Looking through your library for favourites…");
+  try {
+    const found = await currentFavourites();
+    if (!found.length) { lfmNote("No current favourites found in your library."); b.textContent = "Remove my current favourites…"; }
+    else {
+      clearFavs = found;
+      b.textContent = `Click again to remove ${found.length} favourites for good`;
+      lfmNote(`Found ${found.length} favourites. Removing them can't be undone. Click the button again within 10 seconds, or ignore it to cancel.`);
+      clearFavsTimer = setTimeout(() => { clearFavs = null; b.textContent = "Remove my current favourites…"; lfmNote("Cancelled. Nothing was removed."); }, 10000);
+    }
+  } catch (e) { lfmError(e); }
+  b.disabled = false;
+};
+
+$("lfmPreview").onclick = async () => {
+  if (!music?.isAuthorized) { lfmNote("Sign in to Apple Music first (Account, above)."); return; }
+  lfm = null; $("lfmTest").disabled = $("lfmAdd").disabled = true;
+  prefs.lastfmUser = $("lfmUser").value.trim(); savePrefs();
+  lfmNote("Reading Last.fm and finding the songs on Apple Music…");
+  try {
+    const min = +$("lfmMin").value || 10;
+    const r = await glass.lastfmMatch({ user: $("lfmUser").value, min });
+    const fresh = await notFavourited(r.matched);
+    lfm = { fresh };
+    $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
+    lfmNote(`${r.total} songs with ${min}+ plays: ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add.`);
+    $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;
+  } catch (e) { lfmError(e); }
+};
+
+async function addFavourites(songs) {
+  $("lfmTest").disabled = $("lfmAdd").disabled = true;
+  try {
+    for (const [n, s] of songs.entries()) {
+      await amp("PUT", `/v1/me/ratings/songs/${s.id}`, { type: "rating", attributes: { value: 1 } });
+      lfm.fresh = lfm.fresh.filter(x => x !== s);
+      lfmNote(`Favourited ${n + 1} of ${songs.length}…`);
+    }
+    lfmNote(`Favourited ${songs.length}: ${songs.slice(0, 3).map(s => `${s.artist} – ${s.title}`).join("; ")}${songs.length > 3 ? "…" : ""}. ${lfm.fresh.length} left.`);
+  } catch (e) { lfmError(e); }
+  $("lfmTest").disabled = $("lfmAdd").disabled = !lfm.fresh.length;
+}
+$("lfmTest").onclick = () => lfm && addFavourites(lfm.fresh.slice(0, 3));
+$("lfmAdd").onclick = () => lfm && addFavourites([...lfm.fresh]);
+
 $("wordSync").checked = prefs.wordSync;
 $("wordSync").onchange = e => { prefs.wordSync = e.target.checked; savePrefs(); if (pane === "lyrics") loadLyrics(true); };
 

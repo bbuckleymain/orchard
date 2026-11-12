@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const lyricsSources = require("./lyrics-sources");
 const mpris = require("./mpris");
+const lastfm = require("./lastfm");
 
 // On Linux Orchard publishes its own MPRIS player (see mpris.js), so Chromium's anonymous one is turned off:
 // two players for the same song would make scrobblers count it twice.
@@ -137,24 +138,40 @@ ipcMain.handle("token", (_e, refresh) => token(refresh));
 ipcMain.handle("account", () => loadAccount());
 ipcMain.handle("lyrics-external", (_e, q) => lyricsSources.external(q));
 
-// Your Musixmatch API key, encrypted with the system keyring like the Apple sign-in.
-const mxmStore = path.join(app.getPath("userData"), "musixmatch.bin");
-function loadMusixmatchKey() {
-  try {
-    const raw = fs.readFileSync(mxmStore);
-    lyricsSources.setMusixmatchKey(safeStorage.decryptString(raw));
-  } catch {}
+// Your API keys (Musixmatch, Last.fm), encrypted with the system keyring like the Apple sign-in.
+// With no keyring they're kept for this run only.
+const secrets = {};
+const secretPath = name => path.join(app.getPath("userData"), name + ".bin");
+function loadSecret(name) {
+  if (secrets[name] != null) return secrets[name];
+  try { return (secrets[name] = safeStorage.decryptString(fs.readFileSync(secretPath(name)))); } catch { return ""; }
 }
+function saveSecret(name, value) {
+  secrets[name] = value;
+  if (!value) { try { fs.unlinkSync(secretPath(name)); } catch {} return; }
+  if (!safeStorage.isEncryptionAvailable()) return;
+  fs.mkdirSync(path.dirname(secretPath(name)), { recursive: true });
+  fs.writeFileSync(secretPath(name), safeStorage.encryptString(value), { mode: 0o600 });
+}
+function loadMusixmatchKey() { lyricsSources.setMusixmatchKey(loadSecret("musixmatch")); }
 ipcMain.handle("musixmatch-status", () => lyricsSources.musixmatchStatus());
 ipcMain.handle("musixmatch-key", (_e, key) => {
   key = String(key || "").trim();
-  if (!key) { try { fs.unlinkSync(mxmStore); } catch {} }
-  else if (safeStorage.isEncryptionAvailable()) {   // no keyring: kept for this run only
-    fs.mkdirSync(path.dirname(mxmStore), { recursive: true });
-    fs.writeFileSync(mxmStore, safeStorage.encryptString(key), { mode: 0o600 });
-  }
+  saveSecret("musixmatch", key);
   lyricsSources.setMusixmatchKey(key);
   return lyricsSources.musixmatchStatus();
+});
+
+// Most-played Last.fm songs, found on Apple Music. The UI then favourites them with your Apple sign-in.
+ipcMain.handle("lastfm-status", () => !!loadSecret("lastfm"));
+ipcMain.handle("lastfm-key", (_e, key) => { saveSecret("lastfm", String(key || "").trim()); return !!loadSecret("lastfm"); });
+ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
+  const key = loadSecret("lastfm");
+  user = String(user || "").trim();
+  if (!key || !user) throw new Error("Enter your Last.fm username and save your API key first.");
+  const tracks = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
+  const storefront = (loadAccount()?.storefront || "us").toLowerCase();
+  return { total: tracks.length, ...(await lastfm.matchAll(tracks, { token: await token(), storefront })) };
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
