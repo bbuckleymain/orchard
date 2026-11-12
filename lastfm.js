@@ -23,12 +23,17 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
 
 // Finds each track in the Apple Music catalog. Returns { matched: [{ id, artist, title }], unmatched: [track] }.
 // Two Last.fm entries that land on the same Apple song count once.
-async function matchAll(tracks, { token, storefront, fetchFn = fetch }) {
+async function matchAll(tracks, { token, storefront, fetchFn = fetch, pause = sleep }) {
   const headers = { Authorization: "Bearer " + token, Origin: "https://music.apple.com", Referer: "https://music.apple.com/" };
   async function find(t) {
     const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/search?` + new URLSearchParams({ term: `${t.title} ${t.artist}`, types: "songs", limit: "5" });
-    let r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
-    if (r.status === 429) { await sleep(1500); r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) }); }
+    let r;
+    // Apple answers 429 when asked too fast: wait as long as it says (or longer each time) and try again.
+    for (let attempt = 0; attempt < 6; attempt++) {
+      r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+      if (r.status !== 429) break;
+      await pause((+r.headers?.get("retry-after") || 2 ** attempt) * 1000);
+    }
     if (!r.ok) throw new Error(`Apple Music answered ${r.status}`);
     const songs = (await r.json()).results?.songs?.data || [];
     return songs.find(s => matches(s.attributes.name, s.attributes.artistName, 0, t.title, t.artist, 0));
@@ -43,7 +48,7 @@ async function matchAll(tracks, { token, storefront, fetchFn = fetch }) {
       else unmatched.push(t);
     }
   };
-  await Promise.all(Array.from({ length: 5 }, worker));
+  await Promise.all(Array.from({ length: 2 }, worker));
   return { matched: [...found.values()], unmatched };
 }
 

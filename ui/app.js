@@ -728,7 +728,10 @@ async function amp(method, path, body) {
     body: body ? JSON.stringify(body) : undefined,
   });
   let r = await send();
-  if (r.status === 429) { await new Promise(done => setTimeout(done, 1500)); r = await send(); }   // asked too fast: once more
+  for (let wait = 1; r.status === 429 && wait <= 16; wait *= 2) {   // asked too fast: wait, then try again
+    await new Promise(done => setTimeout(done, (+r.headers.get("retry-after") || wait) * 1000));
+    r = await send();
+  }
   if (!r.ok) throw new Error(`Apple Music answered ${r.status}`);
   return r.status === 200 || r.status === 201 ? r.json().catch(() => null) : null;
 }

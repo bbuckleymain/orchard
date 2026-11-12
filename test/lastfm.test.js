@@ -30,3 +30,14 @@ test("matchAll skips wrong songs and counts the same Apple song once", async () 
   assert.deepEqual(r.matched.map(s => s.id), ["2"]);
   assert.deepEqual(r.unmatched.map(t => t.title), ["Gone"]);
 });
+
+test("matchAll waits and retries when Apple says 429", async () => {
+  let calls = 0;
+  const waits = [];
+  const fetchFn = async () => ++calls < 3
+    ? { ok: false, status: 429, headers: { get: () => null } }
+    : reply({ results: { songs: { data: [{ id: "9", attributes: { name: "Hi", artistName: "Ann" } }] } } })();
+  const r = await matchAll([{ artist: "Ann", title: "Hi", plays: 10 }], { token: "t", storefront: "us", fetchFn, pause: ms => waits.push(ms) });
+  assert.deepEqual(r.matched.map(s => s.id), ["9"]);
+  assert.deepEqual(waits, [1000, 2000]);
+});
