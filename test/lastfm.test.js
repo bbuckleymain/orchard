@@ -161,3 +161,25 @@ test("lookUp tries the cleaned-up query, then the ISRC, and trusts an ISRC match
   assert.equal(r.matched[0].id, "9");
   assert.equal(r.matched[0].odd, false, "found by ISRC, so no differences");
 });
+
+test("lookUp finds a song through the artist's albums when searching only finds covers, and doesn't remember a miss", async () => {
+  const json = results => ({ ok: true, status: 200, json: async () => ({ results }) });
+  const fetchFn = async url => {
+    const p = new URL(url).searchParams;
+    if (p.get("entity") === "musicArtist") return json([{ artistId: 77, artistName: "Slipknot" }, { artistId: 78, artistName: "DJ Slipknot" }]);
+    return json([{ trackId: 1, trackName: "Eyeless (8-Bit Slipknot Emulation)", artistName: "8-Bit Arcade" }]);   // only a cover
+  };
+  const asked = [];
+  const appleArtistSongs = async id => { asked.push(id); return [{ id: "5", name: "Eyeless", artistName: "Slipknot", album: "Slipknot" }, { id: "6", name: "Surfacing", artistName: "Slipknot", album: "Slipknot" }]; };
+  const cache = {}, stats = {};
+  const tracks = [{ artist: "Slipknot", title: "Eyeless", plays: 72 }];
+  const [list] = await lookUp(tracks, { country: "gb", cache, fetchFn, appleArtistSongs, stats, pause: () => {} });
+  assert.deepEqual(asked, ["77"], "only the artist with exactly that name");
+  assert.equal(pick(tracks, [list], "gb").matched[0].id, "5");
+  assert.equal(stats.albums, 1);
+
+  const none = [{ artist: "Nobody", title: "Nothing", plays: 9 }];
+  const cache2 = {};
+  await lookUp(none, { country: "gb", cache: cache2, fetchFn, pause: () => {} });
+  assert.ok(!Object.keys(cache2).some(k => k.startsWith("v5|")), "a miss is not remembered");
+});

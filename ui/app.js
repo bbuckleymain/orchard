@@ -1226,6 +1226,26 @@ window.appleSearch = async (term, limit) => {
   } catch { return null; }
 };
 
+// Every song on Apple Music by one artist (id from iTunes search): their albums, then those albums' tracks. null if Apple refuses.
+window.appleArtistSongs = async id => {
+  try {
+    const sf = music.storefrontId || "us", headers = { Authorization: "Bearer " + music.developerToken };
+    const get = async path => { const r = await fetch("https://amp-api.music.apple.com" + path, { headers, signal: AbortSignal.timeout(20000) }); if (!r.ok) throw new Error(r.status); return r.json(); };
+    const albums = [];
+    for (let path = `/v1/catalog/${sf}/artists/${id}/albums?limit=100`, n = 0; path && n < 3; n++) { const r = await get(path); albums.push(...r.data); path = r.next; }
+    const songs = [];
+    for (let i = 0; i < albums.length && i < 240; i += 20) {
+      const r = await get(`/v1/catalog/${sf}/albums?ids=${albums.slice(i, i + 20).map(a => a.id).join(",")}&include=tracks`);
+      for (const al of r.data) for (const s of al.relationships?.tracks?.data || []) {
+        if (s.type !== "songs") continue;
+        songs.push({ id: s.id, name: s.attributes.name, artistName: s.attributes.artistName, album: al.attributes.name,
+                     explicit: s.attributes.contentRating === "clean" ? "cleaned" : s.attributes.contentRating });
+      }
+    }
+    return songs;
+  } catch { return null; }
+};
+
 // The same, by ISRC (the recording's own code): Apple answers with the exact recording, or nothing.
 window.appleIsrc = async isrc => {
   try {

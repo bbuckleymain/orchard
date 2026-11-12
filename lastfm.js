@@ -28,7 +28,7 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
 // (artist|title -> candidates) is filled as it goes, so a run that is stopped or limited carries on where it left off.
 const keyOf = (country, t) => `${country}|${t.artist}|${t.title}`.toLowerCase();
 
-async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep, appleSearch = async () => null, appleIsrc = async () => null, stats = {} }) {
+async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep, appleSearch = async () => null, appleIsrc = async () => null, appleArtistSongs = async () => null, stats = {} }) {
   const out = [];
   stats.apple = stats.apple || 0; stats.itunes = stats.itunes || 0;
 
@@ -73,11 +73,31 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
     return [];
   }
 
+  // Every song on Apple Music by an artist, from the artist's own albums. iTunes search finds the artist's id (and leaves
+  // out songs that aren't sold one by one, which is why it misses real songs); Apple Music's album pages have them all.
+  async function artistCatalogue(name) {
+    const k = `artist|${country}|${name.toLowerCase()}`;
+    if (cache[k]) return cache[k];
+    let ids = [];
+    try {
+      const r = await fetchFn("https://itunes.apple.com/search?" + new URLSearchParams({ term: name, entity: "musicArtist", limit: "5", country }), { signal: AbortSignal.timeout(30000) });
+      await pause(GAP);
+      if (r.ok) ids = ((await r.json()).results || []).filter(a => !differs(a.artistName, name)).slice(0, 3).map(a => String(a.artistId));
+    } catch { return []; }
+    const songs = [];
+    for (const id of ids) {
+      const found = await appleArtistSongs(id);
+      if (found) songs.push(...found.filter(s => !songs.some(o => o.id === s.id)));
+      await pause(APPLE_GAP);
+    }
+    if (songs.length) cache[k] = songs;   // not remembered when empty, so a failed lookup is tried again
+    return songs;
+  }
+
   try {
     for (const [i, t] of tracks.entries()) {
-      const key = "v4|" + keyOf(country, t);   // v4: cleaned-up queries and the ISRC last resort
-      const old = cache["v3|" + keyOf(country, t)];
-      if (!cache[key] && old?.some(c => isExact(c, t))) cache[key] = old;   // a v3 result that was already exact stays good
+      const key = "v5|" + keyOf(country, t);   // v5: only exact results are remembered; the artist's albums are searched
+      for (const v of ["v4|", "v3|"]) { const old = cache[v + keyOf(country, t)]; if (!cache[key] && old?.some(c => isExact(c, t))) cache[key] = old; }   // older results that were exact stay good
       if (!cache[key]) {
         const both = `${t.title} ${t.artist}`, clean = `${tidy(t.title)} ${primaryArtist(t.artist)}`;
         const steps = [
@@ -93,16 +113,21 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
           const more = await ask(i, step);
           list = [...list, ...more.filter(m => !list.some(c => c.id === m.id))];
         }
+        if (!list.some(c => isExact(c, t))) {   // not found by searching: look through the artist's albums
+          const fit = (await artistCatalogue(primaryArtist(t.artist))).filter(c => matches(tidy(c.name), c.artistName, 0, tidy(t.title), t.artist, 0));
+          if (fit.length) { stats.albums = (stats.albums || 0) + 1; list = [...fit, ...list.filter(m => !fit.some(c => c.id === m.id))]; }
+        }
         if (t.mbid && !list.some(c => isExact(c, t))) {   // last resort: look the recording up by its ISRC
           for (const isrc of (await isrcsOf(t.mbid)).slice(0, 3)) {
             const found = await appleIsrc(isrc);
             if (found?.length) { stats.isrc = (stats.isrc || 0) + 1; list = [...found.map(c => ({ ...c, byIsrc: true })), ...list]; break; }
           }
         }
-        cache[key] = list;
+        if (list.some(c => isExact(c, t))) cache[key] = list;   // a miss is not remembered: it may be found next time
+        else out.push(list), stats.missed = (stats.missed || 0) + 1;
         if (i % 20 === 19) save();
       }
-      out.push(cache[key]);
+      if (cache[key]) out.push(cache[key]);
       onProgress(i + 1, tracks.length);
     }
   } finally { save(); }   // however it stops, what was found so far is kept
