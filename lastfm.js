@@ -29,21 +29,33 @@ const keyOf = (country, t) => `${country}|${t.artist}|${t.title}`.toLowerCase();
 
 async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep }) {
   const out = [];
+
+  async function search(params) {
+    const url = "https://itunes.apple.com/search?" + new URLSearchParams({ entity: "song", country, ...params });
+    let r = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try { r = await fetchFn(url, { signal: AbortSignal.timeout(30000) }); }
+      catch { r = null; await pause(5000 * (attempt + 1)); continue; }   // a timeout or dropped connection: try again
+      if (r.status !== 403 && r.status !== 429) break;
+      await pause(60000);   // limited: wait a minute
+    }
+    if (!r?.ok) throw new Error(`iTunes search ${r ? "answered " + r.status : "didn't answer"}; run Preview again in a few minutes, your progress is saved`);
+    const list = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName, explicit: s.trackExplicitness }));
+    await pause(GAP);
+    return list;
+  }
+
   try {
     for (const [i, t] of tracks.entries()) {
-      const key = "v2|" + keyOf(country, t);   // v2: results now carry the clean/explicit flag and 8 per search
+      const key = "v3|" + keyOf(country, t);   // v3: keeps searching, with wider queries, until a result has no differences
       if (!cache[key]) {
-        const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${t.title} ${t.artist}`, entity: "song", limit: "8", country });
-        let r = null;
-        for (let attempt = 0; attempt < 4; attempt++) {
-          try { r = await fetchFn(url, { signal: AbortSignal.timeout(30000) }); }
-          catch { r = null; await pause(5000 * (attempt + 1)); continue; }   // a timeout or dropped connection: try again
-          if (r.status !== 403 && r.status !== 429) break;
-          await pause(60000);   // limited: wait a minute
+        let list = await search({ term: `${t.title} ${t.artist}`, limit: "8" });
+        for (const wider of [{ term: `${t.title} ${t.artist}`, limit: "50" }, { term: t.title, attribute: "songTerm", limit: "100" }]) {
+          if (list.some(c => isExact(c, t))) break;
+          const more = await search(wider);
+          list = [...list, ...more.filter(m => !list.some(c => c.id === m.id))];
         }
-        if (!r?.ok) throw new Error(`iTunes search ${r ? "answered " + r.status : "didn't answer"}; run Preview again in a few minutes, your progress is saved`);
-        cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName, explicit: s.trackExplicitness }));
-        await pause(GAP);
+        cache[key] = list;
         if (i % 20 === 19) save();
       }
       out.push(cache[key]);
@@ -55,7 +67,11 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 
 // Do two names differ in their words? Catches a "Live", "Remix" or "Remastered" tag, or another artist.
 const words = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
-const differs = (a, b) => { const x = words(a), y = words(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
+// "Remastered", "(2011 Remaster)" and "- Remastered 2009" are fine, so they are not counted.
+const REMASTER = /\s*[(\[–-]\s*(?:\d{4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+(?:version|\d{4}))*\s*[)\]]?/gi;
+const differs = (a, b) => { const x = words(String(a || "").replace(REMASTER, "")), y = words(String(b || "").replace(REMASTER, "")); return x.size !== y.size || [...x].some(w => !y.has(w)); };
+// A result that is the right song, not live or clean, and has no differences.
+const isExact = (c, t) => matches(c.name, c.artistName, 0, t.title, t.artist, 0) && !badVersion(c, t) && !differs(c.name, t.title) && !differs(c.artistName, t.artist);
 
 // Live and clean versions are never picked. A word in the song's own title doesn't count against it ("Live Forever",
 // "Clean"): a version is rejected only when it has more "live" / "clean" words than the Last.fm title does, or when the
@@ -75,7 +91,7 @@ function pick(tracks, candidates, country) {
   const found = new Map(), unmatched = [];
   tracks.forEach((t, i) => {
     const fits = c => matches(c.name, c.artistName, 0, t.title, t.artist, 0);
-    const song = (candidates[i] || []).find(c => !badVersion(c, t) && fits(c));
+    const song = (candidates[i] || []).find(c => isExact(c, t)) || (candidates[i] || []).find(c => !badVersion(c, t) && fits(c));
     if (!song) unmatched.push((candidates[i] || []).some(c => badVersion(c, t) && fits(c)) ? { ...t, onlyLiveOrClean: true } : t);
     else if (found.has(song.id)) { const m = found.get(song.id); m.keys.push(keyOf(country, t)); m.from.push(t); }
     else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, album: song.album, keys: [keyOf(country, t)], from: [t],

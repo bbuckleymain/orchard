@@ -50,7 +50,7 @@ test("toCsv lists differing matches first and quotes commas", () => {
 });
 
 test("pick marks a different version as odd", () => {
-  const r = pick([{ artist: "Ann", title: "Yo", plays: 15 }], [[{ id: "2", name: "Yo (Remastered)", artistName: "Ann" }]], "gb");
+  const r = pick([{ artist: "Ann", title: "Yo", plays: 15 }], [[{ id: "2", name: "Yo (Acoustic)", artistName: "Ann" }]], "gb");
   assert.equal(r.matched[0].odd, true);
 });
 
@@ -85,4 +85,28 @@ test("a song with live or clean in its own title still gets the studio version",
   assert.equal(pickOne("Live Forever", [c("1", "Live Forever", { album: "Live at Wembley" })]), undefined, "live album");
   assert.equal(pickOne("Clean", [c("1", "Clean (Clean Version)"), c("2", "Clean", { explicit: "cleaned" }), c("3", "Clean")]), "3");
   assert.equal(pickOne("Hi (Live at Wembley)", [c("1", "Hi (Live at Wembley)", { album: "Live at Wembley" })]), "1", "asked for live");
+});
+
+test("lookUp keeps searching until a result has no differences", async () => {
+  const reply = results => ({ ok: true, status: 200, json: async () => ({ results }) });
+  const song = (id, name) => ({ trackId: id, trackName: name, artistName: "Ann" });
+  const queries = [];
+  const fetchFn = async url => {
+    const p = new URL(url).searchParams; queries.push(p.get("limit"));
+    return reply(queries.length === 1 ? [song(1, "Hi (Live)")] : [song(1, "Hi (Live)"), song(2, "Hi")]);
+  };
+  const cache = {};
+  const tracks = [{ artist: "Ann", title: "Hi", plays: 9 }];
+  const [list] = await lookUp(tracks, { country: "gb", cache, fetchFn, pause: () => {} });
+  assert.deepEqual(queries, ["8", "50"], "a wider search, then it stopped");
+  assert.equal(pick(tracks, [list], "gb").matched[0].id, "2");
+});
+
+test("remaster tags are not differences, other tags are", () => {
+  const c = (name) => [{ id: "1", name, artistName: "Ann" }];
+  const odd = name => pick([{ artist: "Ann", title: "Hi", plays: 9 }], [c(name)], "gb").matched[0].odd;
+  assert.equal(odd("Hi - 2011 Remaster"), false);
+  assert.equal(odd("Hi (Remastered 2009)"), false);
+  assert.equal(odd("Hi (Remastered)"), false);
+  assert.equal(odd("Hi (Acoustic)"), true);
 });
