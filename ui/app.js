@@ -1207,7 +1207,7 @@ function lfmButtons() {
   $("lfmSelExact").disabled = !exact;
   $("lfmSelNone").disabled = !picked;
   $("lfmExact").disabled = !picked;
-  $("lfmExact").textContent = `Add selected (${picked})`;
+  $("lfmExact").textContent = `Add selected (${picked}), set aside the other ${fresh.length - picked}`;
   $("lfmAside").disabled = !aside;
   $("lfmAside").textContent = `Set aside the ${aside} with differences`;
   $("lfmMatchesHead").textContent = lfm ? `Matches to check (${fresh.filter(m => m.odd).length} differ, ${lfm.matched.length} in all, ${picked} selected)` : "Matches to check";
@@ -1227,18 +1227,23 @@ function showByHand(list) {
 }
 $("lfmSelExact").onclick = () => { if (!lfm) return; lfm.fresh.filter(m => !m.odd).forEach(m => lfm.selected.add(m.id)); showMatches(); };
 $("lfmSelNone").onclick = () => { if (!lfm) return; lfm.selected.clear(); showMatches(); };
-$("lfmExact").onclick = () => lfm && addFavourites(lfmSelected());
-$("lfmAside").onclick = async () => {
-  if (!lfm) return;
-  const odd = lfm.fresh.filter(m => m.odd && !lfm.selected.has(m.id));
+async function setAside(items, why, before = "") {
   try {
-    const { list, file } = await glass.lastfmBlacklist({ items: odd, country: music.storefrontId });
-    odd.forEach(m => lfm.aside.add(m.id));
+    const { list, file } = await glass.lastfmBlacklist({ items, country: music.storefrontId });
+    items.forEach(m => lfm.aside.add(m.id));
     lfm.fresh = lfm.fresh.filter(m => !lfm.aside.has(m.id));
     showMatches(); showByHand(list);
-    lfmNote(`${odd.length} with differences set aside, not added: favourite them by hand from "To add by hand" below or ${file}`);
+    lfmNote(`${before}${items.length} ${why} set aside, not added: favourite them by hand from "To add by hand" below or ${file}`);
   } catch (e) { lfmError(e); }
+}
+// Add selected: the ticked songs are added and every song left unticked is set aside.
+$("lfmExact").onclick = async () => {
+  if (!lfm) return;
+  const rest = lfm.fresh.filter(m => !lfm.selected.has(m.id));
+  const added = lfmSelected().length;
+  if (await addFavourites(lfmSelected()) && rest.length) await setAside(rest, "left unticked", `Favourited ${added}. `);
 };
+$("lfmAside").onclick = () => lfm && setAside(lfm.fresh.filter(m => m.odd && !lfm.selected.has(m.id)), "with differences");
 $("lfmTest").onclick = () => lfm && addFavourites((lfm.selected.size ? lfmSelected() : lfm.fresh).slice(0, 3));
 $("lfmAdd").onclick = () => lfm && addFavourites([...lfm.fresh]);
 
