@@ -178,6 +178,21 @@ ipcMain.handle("lastfm-log-forget", (_e, ids) => {   // a song that's no longer 
   for (const k of Object.keys(log)) if (gone.has(String(log[k]))) delete log[k];
   fs.writeFileSync(favLog, JSON.stringify(log));
 });
+// Matches that differ from the Last.fm name are never added automatically: they are set aside (key -> song) and listed,
+// in the window and in ~/.config/Orchard/lastfm-by-hand.csv, to add to favourites by hand. They are not searched again.
+const blacklistFile = path.join(app.getPath("userData"), "lastfm-blacklist.json");
+const readBlacklist = () => { try { return JSON.parse(fs.readFileSync(blacklistFile, "utf8")); } catch { return {}; } };
+const byHand = blacklist => [...new Map(Object.values(blacklist).map(e => [e.id, e])).values()];
+ipcMain.handle("lastfm-blacklist", (_e, { items, country }) => {
+  country = String(country || "us").toLowerCase().slice(0, 2);
+  const blacklist = readBlacklist();
+  for (const m of items)
+    for (const [i, key] of m.keys.entries()) blacklist[key] = { id: m.id, artist: m.artist, title: m.title, album: m.album || "", from: m.from[i] || m.from[0] };
+  fs.writeFileSync(blacklistFile, JSON.stringify(blacklist));
+  const list = byHand(blacklist), file = path.join(app.getPath("userData"), "lastfm-by-hand.csv");
+  fs.writeFileSync(file, lastfm.toManualCsv(list, country));
+  return { list, file };
+});
 ipcMain.handle("lastfm-log-clear", () => fs.writeFileSync(favLog, "{}"));
 
 ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
@@ -187,7 +202,8 @@ ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
   country = String(country || "us").toLowerCase().slice(0, 2);
   const all = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
   const log = readFavLog();
-  const tracks = all.filter(t => !log[lastfm.keyOf(country, t)]);
+  const blacklist = readBlacklist();
+  const tracks = all.filter(t => !log[lastfm.keyOf(country, t)] && !blacklist[lastfm.keyOf(country, t)]);
   const cacheFile = path.join(app.getPath("userData"), "lastfm-itunes.json");
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(cacheFile, "utf8")); } catch {}
@@ -200,7 +216,7 @@ ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
   // Saved so the matches can be checked afterwards, by you or by Claude: ~/.config/Orchard/lastfm-matches.csv
   const file = path.join(app.getPath("userData"), "lastfm-matches.csv");
   try { fs.writeFileSync(file, lastfm.toCsv(picked.matched, picked.unmatched)); } catch {}
-  return { total: all.length, logged: all.length - tracks.length, file, ...picked };
+  return { total: all.length, logged: all.length - tracks.length, byHand: byHand(blacklist), file, ...picked };
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());

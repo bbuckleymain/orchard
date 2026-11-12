@@ -108,8 +108,18 @@ function toCsv(matched, unmatched) {
   for (const t of unmatched) rows.push([t.onlyLiveOrClean ? "ONLY LIVE/CLEAN" : "NOT FOUND", t.artist, t.title, t.plays, "", "", "", ""]);
   const rank = { CHECK: 0, "NOT FOUND": 1, "ONLY LIVE/CLEAN": 1, ok: 2 };
   rows.sort((a, b) => rank[a[0]] - rank[b[0]]);
-  const cell = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
-  return [["status", "lastfm_artist", "lastfm_title", "plays", "apple_artist", "apple_title", "apple_album", "apple_id"], ...rows].map(r => r.map(cell).join(",")).join("\n") + "\n";
+  return csv([["status", "lastfm_artist", "lastfm_title", "plays", "apple_artist", "apple_title", "apple_album", "apple_id"], ...rows]);
 }
 
-module.exports = { topTracks, lookUp, pick, keyOf, toCsv };
+const csv = rows => {
+  const cell = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  return rows.map(r => r.map(cell).join(",")).join("\n") + "\n";
+};
+
+// The set-aside songs (matches that differ from the Last.fm name) with a link each, for adding to favourites by hand.
+function toManualCsv(entries, country) {
+  return csv([["lastfm_artist", "lastfm_title", "apple_artist", "apple_title", "apple_album", "link"],
+              ...entries.map(e => [e.from.artist, e.from.title, e.artist, e.title, e.album, `https://music.apple.com/${country}/song/${e.id}`])]);
+}
+
+module.exports = { topTracks, lookUp, pick, keyOf, toCsv, toManualCsv };

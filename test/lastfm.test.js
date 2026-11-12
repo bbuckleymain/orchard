@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { topTracks, lookUp, pick, toCsv } = require("../lastfm.js");
+const { topTracks, lookUp, pick, toCsv, toManualCsv } = require("../lastfm.js");
 
 const reply = body => async () => ({ ok: true, status: 200, json: async () => body });
 const track = (name, artist, plays) => ({ name, artist: { name: artist }, playcount: String(plays) });
@@ -109,4 +109,9 @@ test("remaster tags are not differences, other tags are", () => {
   assert.equal(odd("Hi (Remastered 2009)"), false);
   assert.equal(odd("Hi (Remastered)"), false);
   assert.equal(odd("Hi (Acoustic)"), true);
+});
+
+test("toManualCsv gives each set-aside song a link", () => {
+  const lines = toManualCsv([{ id: "5", artist: "Ann", title: "Hi (Acoustic)", album: "Alb", from: { artist: "Ann", title: "Hi" } }], "gb").trim().split("\n");
+  assert.equal(lines[1], "Ann,Hi,Ann,Hi (Acoustic),Alb,https://music.apple.com/gb/song/5");
 });

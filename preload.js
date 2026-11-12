@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld("glass", {
   setLastfmKey: key => ipcRenderer.invoke("lastfm-key", key),
   lastfmLogAdd: entries => ipcRenderer.invoke("lastfm-log-add", entries),
   lastfmLogForget: ids => ipcRenderer.invoke("lastfm-log-forget", ids),
+  lastfmBlacklist: query => ipcRenderer.invoke("lastfm-blacklist", query),
   lastfmLogClear: () => ipcRenderer.invoke("lastfm-log-clear"),
   lastfmMatch: query => ipcRenderer.invoke("lastfm-match", query),
   onLastfmProgress: cb => ipcRenderer.on("lastfm-progress", (_e, p) => cb(p)),
