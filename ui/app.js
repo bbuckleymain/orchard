@@ -689,10 +689,11 @@ $("queue").addEventListener("contextmenu", e => {
   e.preventDefault();
   const i = +li.dataset.i, pos = queuePos(), last = (music.queue?.items?.length || 0) - 1;
   menuItem = { kind: "queued", li };
-  fillMenu(i === pos ? [["qplay", "Play from Start"]] : [
+  fillMenu(i === pos ? [["qplay", "Play from Start"], "-", ["goalbum", "Go to Album"], ["goartist", "Go to Artist"]] : [
     ["qplay", "Play Now"], "-",
     i > pos + 1 && ["qtop", "Move to Top"], i > pos + 1 && ["qup", "Move Up"],
     i < last && ["qdown", "Move Down"], i < last && ["qbottom", "Move to Bottom"], "-",
+    ["goalbum", "Go to Album"], ["goartist", "Go to Artist"], "-",
     ["qremove", "Remove from Queue"], "-",
     music.isAuthorized && ["fav", "Add to Favourites"],
   ]);
@@ -797,6 +798,8 @@ const ACTIONS = {
     return `Added to your library: ${item.title}`;
   },
   async open(item) { await open(item); return ""; },
+  async goalbum(item) { await open(await relatedTo(item, "albums")); return ""; },
+  async goartist(item) { await open(await relatedTo(item, "artists")); return ""; },
   async fav(item) { await setFavourite(favTargets(favSource(item)), true); refreshHeart(); return "Added to favourites"; },
   async unfav(item) { await setFavourite(favTargets(favSource(item)), false); refreshHeart(); return "Removed from favourites"; },
   // songs in the queue (right-click in the Queue pane)
@@ -820,6 +823,7 @@ function menuEntries(item) {
   const canAdd = signedIn && !item.lib && ["song", "album", "playlist"].includes(item.kind);
   switch (item.kind) {
     case "song": return [["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
+                         ["goalbum", "Go to Album"], ["goartist", "Go to Artist"], "-",
                          canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"], signedIn && ["fav", "Add to Favourites"]];
     case "album":
     case "playlist": return [["play", "Play"], ["shuffle", "Shuffle"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
@@ -854,6 +858,17 @@ async function setFavourite(targets, on) {
     catch (e) { if (!/ 404$/.test(e.message)) throw e; }   // a 404 only means that id had no rating
   }
   await glass.lastfmLogForget(targets.map(t => t[1]));
+}
+
+// The album or artist of a song, as a list item that open() can show. Asked of Apple by the song's catalog id
+// (or, for a library song with none, its library id).
+async function relatedTo(item, what) {
+  const s = favSource(item), catalog = s.catalogId || (!s.lib && s.id);
+  const r = await amp("GET", catalog ? `/v1/catalog/${music.storefrontId || "us"}/songs/${catalog}?include=albums,artists` : `/v1/me/library/songs/${s.id}?include=albums,artists`);
+  const found = r?.data?.[0]?.relationships?.[what]?.data?.[0];
+  const rel = found && toItem(found);
+  if (!rel) throw new Error(`No ${what.slice(0, -1)} found for this song.`);
+  return rel;
 }
 
 let heartFor = null;
@@ -937,7 +952,7 @@ $("menu").addEventListener("click", async e => {
   if (act === "back") { e.stopPropagation(); fillMenu(menuEntries(item)); return; }
   if (act === "none") { e.stopPropagation(); return; }
   try {
-    if (act === "open" || act === "library" || act === "topl") status("Working…");
+    if (["open", "library", "topl", "goalbum", "goartist"].includes(act)) status("Working…");
     const msg = act === "topl" ? await addToPlaylist(item, editable.find(p => p.id === b.dataset.pl)) : await ACTIONS[act](item);
     if (msg) status(msg);
   } catch (err) { status("Couldn't do that: " + (err?.message || err)); }
