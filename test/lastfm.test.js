@@ -76,3 +76,13 @@ test("pick skips live and clean versions but not when the Last.fm name asks for 
   assert.equal(pickOne("Hi (Live)", [c("1", "Hi (Live)")]).matched[0].id, "1", "asked for live");
   assert.equal(pickOne("Clean", [c("1", "Clean")]).matched[0].id, "1", "a song called Clean");
 });
+
+test("a song with live or clean in its own title still gets the studio version", () => {
+  const c = (id, name, extra = {}) => ({ id, name, artistName: "Ann", ...extra });
+  const pickOne = (title, cands) => pick([{ artist: "Ann", title, plays: 9 }], [cands], "gb").matched[0]?.id;
+  assert.equal(pickOne("Live Forever", [c("1", "Live Forever - Live at Knebworth"), c("2", "Live Forever (Live)"), c("3", "Live Forever")]), "3");
+  assert.equal(pickOne("Live Forever", [c("1", "Live Forever", { album: "Definitely Maybe" })]), "1", "'Live' in the title alone is fine");
+  assert.equal(pickOne("Live Forever", [c("1", "Live Forever", { album: "Live at Wembley" })]), undefined, "live album");
+  assert.equal(pickOne("Clean", [c("1", "Clean (Clean Version)"), c("2", "Clean", { explicit: "cleaned" }), c("3", "Clean")]), "3");
+  assert.equal(pickOne("Hi (Live at Wembley)", [c("1", "Hi (Live at Wembley)", { album: "Live at Wembley" })]), "1", "asked for live");
+});

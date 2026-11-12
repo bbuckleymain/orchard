@@ -57,12 +57,16 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 const words = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
 const differs = (a, b) => { const x = words(a), y = words(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
 
-// Live and clean versions are never picked, unless the Last.fm name itself says "live" or "clean".
-const hasWord = (text, w) => new RegExp(`\\b${w}\\b`, "i").test(text || "");
+// Live and clean versions are never picked. A word in the song's own title doesn't count against it ("Live Forever",
+// "Clean"): a version is rejected only when it has more "live" / "clean" words than the Last.fm title does, or when the
+// Last.fm title carries no such tag and the album is a live one / the song is flagged clean. Asking for "(Live)" allows live.
+const count = (text, w) => (String(text || "").match(new RegExp(`\\b${w}\\b`, "gi")) || []).length;
 const LIVE_ALBUM = /\blive (at|from|in|on)\b|\(live\)|\blive$|unplugged|in concert/i;
+const LIVE_TAG = /\(live|\[live|\blive (at|from|in|on)\b|- live\b|\blive$/i;
+const CLEAN_TAG = /\(clean|\[clean|- clean\b|\bclean (version|edit)\b/i;
 function badVersion(c, t) {
-  if (!hasWord(t.title, "live") && (hasWord(c.name, "live") || LIVE_ALBUM.test(c.album))) return "live";
-  if (!hasWord(t.title, "clean") && (c.explicit === "cleaned" || hasWord(c.name, "clean"))) return "clean";
+  if (count(c.name, "live") > count(t.title, "live") || (LIVE_ALBUM.test(c.album || "") && !LIVE_TAG.test(t.title))) return "live";
+  if (count(c.name, "clean") > count(t.title, "clean") || (c.explicit === "cleaned" && !CLEAN_TAG.test(t.title))) return "clean";
   return null;
 }
 
