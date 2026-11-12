@@ -1176,7 +1176,7 @@ $("lfmPreview").onclick = async () => {
     lfm = { matched: r.matched, fresh, selected: new Set(), done: new Set(), aside: new Set() };
     showMatches(); showByHand(r.byHand);
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
-    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done or set aside before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add. List saved to ${r.file}`);
+    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done or set aside before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found (added to "To add by hand"). ${fresh.length} to add. Searches: ${r.stats.apple} on Apple Music, ${r.stats.itunes} on iTunes. List saved to ${r.file}`);
   } catch (e) { lfmError(e); }
 };
 
@@ -1214,6 +1214,18 @@ function lfmButtons() {
 }
 
 // Set aside = never added automatically and not searched again; listed (here and in a file) to favourite by hand.
+// Apple Music's own search, for the Last.fm import (called from the main process). null = Apple refused (429 etc.), so the
+// import falls back to iTunes search for a while.
+window.appleSearch = async (term, limit) => {
+  try {
+    const r = await fetch(`https://amp-api.music.apple.com/v1/catalog/${music.storefrontId || "us"}/search?` + new URLSearchParams({ term, types: "songs", limit }),
+                          { headers: { Authorization: "Bearer " + music.developerToken }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    return ((await r.json()).results?.songs?.data || []).map(s => ({ id: s.id, name: s.attributes.name, artistName: s.attributes.artistName,
+      album: s.attributes.albumName, explicit: s.attributes.contentRating === "clean" ? "cleaned" : s.attributes.contentRating }));
+  } catch { return null; }
+};
+
 // Tick a song once you've favourited it yourself: it stays in the list, struck through, and is saved in the file too.
 function showByHand(list) {
   const head = () => { $("lfmHandHead").textContent = `To add by hand (${list.filter(e => !e.added).length} left of ${list.length})`; };
@@ -1223,12 +1235,14 @@ function showByHand(list) {
     const row = document.createElement("label"), tick = document.createElement("input"), text = document.createElement("span");
     row.style.cssText = "display:flex;gap:6px;align-items:flex-start;padding:3px 0;border-bottom:1px solid rgba(0,80,140,.15)";
     tick.type = "checkbox"; tick.checked = !!e.added;
-    text.textContent = `Last.fm: ${e.from.artist} – ${e.from.title}  →  Apple Music: ${e.artist} – ${e.title}${e.album ? ` (${e.album})` : ""}`;
+    text.textContent = e.id
+      ? `Last.fm: ${e.from.artist} – ${e.from.title}  →  Apple Music: ${e.artist} – ${e.title}${e.album ? ` (${e.album})` : ""}`
+      : `Last.fm: ${e.from.artist} – ${e.from.title}  →  ${e.onlyLiveOrClean ? "only live or clean versions found" : "not found on Apple Music"}, search for it`;
     const strike = () => { text.style.textDecoration = e.added ? "line-through" : ""; text.style.opacity = e.added ? ".6" : ""; };
     strike();
     tick.onchange = async () => {
       const added = tick.checked;
-      try { await glass.lastfmHandMark({ id: e.id, added, country: music.storefrontId }); e.added = added; strike(); head(); }
+      try { await glass.lastfmHandMark({ ref: e.id || e.key, added, country: music.storefrontId }); e.added = added; strike(); head(); }
       catch (err) { tick.checked = !added; lfmError(err); }
     };
     row.append(tick, text);

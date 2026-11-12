@@ -2,7 +2,8 @@
 const { matches } = require("./musixmatch");
 
 const TIMEOUT = 15000;
-const GAP = 3200;   // iTunes allows about 20 searches a minute
+const GAP = 3200;        // iTunes allows about 20 searches a minute
+const APPLE_GAP = 400;   // Apple Music's own search is asked more gently than it needs
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 
 // Every track played `min` times or more, most played first. Last.fm lists them in that order, so reading stops
@@ -27,10 +28,11 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
 // (artist|title -> candidates) is filled as it goes, so a run that is stopped or limited carries on where it left off.
 const keyOf = (country, t) => `${country}|${t.artist}|${t.title}`.toLowerCase();
 
-async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep }) {
+async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep, appleSearch = async () => null, stats = {} }) {
   const out = [];
+  stats.apple = stats.apple || 0; stats.itunes = stats.itunes || 0;
 
-  async function search(params) {
+  async function itunes(params) {
     const url = "https://itunes.apple.com/search?" + new URLSearchParams({ entity: "song", country, ...params });
     let r = null;
     for (let attempt = 0; attempt < 4; attempt++) {
@@ -41,18 +43,37 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
     }
     if (!r?.ok) throw new Error(`iTunes search ${r ? "answered " + r.status : "didn't answer"}; run Preview again in a few minutes, your progress is saved`);
     const list = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName, explicit: s.trackExplicitness }));
+    stats.itunes++;
     await pause(GAP);
     return list;
+  }
+
+  // Apple Music's own search comes first. It answers null when it refuses (429), and then iTunes search is used for the
+  // next 25 songs before Apple is tried again.
+  let appleDownUntil = 0;
+  async function ask(i, step) {
+    if (i >= appleDownUntil) {
+      const list = await appleSearch(step.term, step.apple);
+      if (list) { stats.apple++; await pause(APPLE_GAP); return list; }
+      appleDownUntil = i + 25;
+    }
+    return itunes(step.itunes);
   }
 
   try {
     for (const [i, t] of tracks.entries()) {
       const key = "v3|" + keyOf(country, t);   // v3: keeps searching, with wider queries, until a result has no differences
       if (!cache[key]) {
-        let list = await search({ term: `${t.title} ${t.artist}`, limit: "8" });
-        for (const wider of [{ term: `${t.title} ${t.artist}`, limit: "50" }, { term: t.title, attribute: "songTerm", limit: "100" }]) {
-          if (list.some(c => isExact(c, t))) break;
-          const more = await search(wider);
+        const both = `${t.title} ${t.artist}`;
+        const steps = [
+          { term: both, apple: 10, itunes: { term: both, limit: "8" } },
+          { term: both, apple: 25, itunes: { term: both, limit: "50" } },
+          { term: t.title, apple: 25, itunes: { term: t.title, attribute: "songTerm", limit: "100" } },
+        ];
+        let list = [];
+        for (const [n, step] of steps.entries()) {
+          if (n && list.some(c => isExact(c, t))) break;
+          const more = await ask(i, step);
           list = [...list, ...more.filter(m => !list.some(c => c.id === m.id))];
         }
         cache[key] = list;
@@ -118,8 +139,10 @@ const csv = rows => {
 
 // The set-aside songs (matches that differ from the Last.fm name) with a link each, for adding to favourites by hand.
 function toManualCsv(entries, country) {
-  return csv([["lastfm_artist", "lastfm_title", "apple_artist", "apple_title", "apple_album", "link", "added_by_hand"],
-              ...entries.map(e => [e.from.artist, e.from.title, e.artist, e.title, e.album, `https://music.apple.com/${country}/song/${e.id}`, e.added ? "yes" : ""])]);
+  const link = e => e.id ? `https://music.apple.com/${country}/song/${e.id}` : `https://music.apple.com/${country}/search?term=${encodeURIComponent(e.from.title + " " + e.from.artist)}`;
+  const note = e => e.id ? "differs from the Last.fm name" : e.onlyLiveOrClean ? "only live or clean versions found: search for it" : "not found on Apple Music: search for it";
+  return csv([["lastfm_artist", "lastfm_title", "apple_artist", "apple_title", "apple_album", "link", "note", "added_by_hand"],
+              ...entries.map(e => [e.from.artist, e.from.title, e.artist, e.title, e.album, link(e), note(e), e.added ? "yes" : ""])]);
 }
 
 module.exports = { topTracks, lookUp, pick, keyOf, toCsv, toManualCsv };

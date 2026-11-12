@@ -182,7 +182,8 @@ ipcMain.handle("lastfm-log-forget", (_e, ids) => {   // a song that's no longer 
 // in the window and in ~/.config/Orchard/lastfm-by-hand.csv, to add to favourites by hand. They are not searched again.
 const blacklistFile = path.join(app.getPath("userData"), "lastfm-blacklist.json");
 const readBlacklist = () => { try { return JSON.parse(fs.readFileSync(blacklistFile, "utf8")); } catch { return {}; } };
-const byHand = blacklist => [...new Map(Object.values(blacklist).map(e => [e.id, e])).values()];
+// One row per Apple song (or per Last.fm entry, for songs that were not found).
+const byHand = blacklist => [...new Map(Object.values(blacklist).map(e => [e.id || e.key, e])).values()];
 const saveByHand = (blacklist, country) => {
   fs.writeFileSync(blacklistFile, JSON.stringify(blacklist));
   const list = byHand(blacklist), file = path.join(app.getPath("userData"), "lastfm-by-hand.csv");
@@ -190,16 +191,16 @@ const saveByHand = (blacklist, country) => {
   return { list, file };
 };
 // Ticking a song as added by hand: kept in the list, marked, and written to the file.
-ipcMain.handle("lastfm-hand-mark", (_e, { id, added, country }) => {
+ipcMain.handle("lastfm-hand-mark", (_e, { ref, added, country }) => {
   const blacklist = readBlacklist();
-  for (const e of Object.values(blacklist)) if (e.id === id) e.added = !!added;
+  for (const e of Object.values(blacklist)) if ((e.id || e.key) === ref) e.added = !!added;
   return saveByHand(blacklist, country);
 });
 ipcMain.handle("lastfm-blacklist", (_e, { items, country }) => {
   const blacklist = readBlacklist();
   for (const m of items)
     for (const [i, key] of m.keys.entries())
-      blacklist[key] = { id: m.id, artist: m.artist, title: m.title, album: m.album || "", from: m.from[i] || m.from[0], added: blacklist[key]?.added };
+      blacklist[key] = { key, id: m.id, artist: m.artist, title: m.title, album: m.album || "", from: m.from[i] || m.from[0], added: blacklist[key]?.added };
   return saveByHand(blacklist, country);
 });
 ipcMain.handle("lastfm-log-clear", () => fs.writeFileSync(favLog, "{}"));
@@ -212,20 +213,34 @@ ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
   const all = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
   const log = readFavLog();
   const blacklist = readBlacklist();
-  const tracks = all.filter(t => !log[lastfm.keyOf(country, t)] && !blacklist[lastfm.keyOf(country, t)]);
+  const skipped = t => log[lastfm.keyOf(country, t)] || (blacklist[lastfm.keyOf(country, t)] && !blacklist[lastfm.keyOf(country, t)].notFound);   // not-found songs are tried again
+  const tracks = all.filter(t => !skipped(t));
   const cacheFile = path.join(app.getPath("userData"), "lastfm-itunes.json");
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(cacheFile, "utf8")); } catch {}
   const save = () => { try { fs.writeFileSync(cacheFile, JSON.stringify(cache)); } catch {} };
+  const stats = { apple: 0, itunes: 0 };
   const candidates = await lastfm.lookUp(tracks, {
-    country, cache, save,
+    country, cache, save, stats,
+    // Apple Music's own search runs in the window; null tells lookUp it refused, so iTunes search takes over.
+    appleSearch: async (term, limit) => {
+      try { return await win.webContents.executeJavaScript(`window.appleSearch(${JSON.stringify(term)}, ${limit})`); } catch { return null; }
+    },
     onProgress: (done, total) => win?.webContents.send("lastfm-progress", { done, total }),
   });
   const picked = lastfm.pick(tracks, candidates, country);
   // Saved so the matches can be checked afterwards, by you or by Claude: ~/.config/Orchard/lastfm-matches.csv
   const file = path.join(app.getPath("userData"), "lastfm-matches.csv");
   try { fs.writeFileSync(file, lastfm.toCsv(picked.matched, picked.unmatched)); } catch {}
-  return { total: all.length, logged: all.length - tracks.length, byHand: byHand(blacklist), file, ...picked };
+  // Songs that couldn't be found are added to the by-hand list (replacing last time's, so ones found since drop out).
+  const wasAdded = {};
+  for (const [k, e] of Object.entries(blacklist)) if (e.notFound) { wasAdded[k] = e.added; delete blacklist[k]; }
+  for (const t of picked.unmatched) {
+    const k = lastfm.keyOf(country, t);
+    blacklist[k] = { key: k, id: null, notFound: true, onlyLiveOrClean: !!t.onlyLiveOrClean, artist: "", title: "", album: "", from: t, added: wasAdded[k] };
+  }
+  const hand = saveByHand(blacklist, country);
+  return { total: all.length, logged: all.length - tracks.length, byHand: hand.list, handFile: hand.file, stats, file, ...picked };
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());

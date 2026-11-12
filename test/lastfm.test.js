@@ -113,7 +113,26 @@ test("remaster tags are not differences, other tags are", () => {
 
 test("toManualCsv gives each set-aside song a link", () => {
   const lines = toManualCsv([{ id: "5", artist: "Ann", title: "Hi (Acoustic)", album: "Alb", from: { artist: "Ann", title: "Hi" } }], "gb").trim().split("\n");
-  assert.equal(lines[1], "Ann,Hi,Ann,Hi (Acoustic),Alb,https://music.apple.com/gb/song/5,");
+  assert.equal(lines[1], "Ann,Hi,Ann,Hi (Acoustic),Alb,https://music.apple.com/gb/song/5,differs from the Last.fm name,");
   const done = toManualCsv([{ id: "5", artist: "Ann", title: "Hi", album: "", added: true, from: { artist: "Ann", title: "Hi" } }], "gb");
   assert.ok(done.trim().endsWith(",yes"));
+});
+
+test("toManualCsv lists a song that was not found with a search link", () => {
+  const lines = toManualCsv([{ id: null, key: "k", artist: "", title: "", album: "", from: { artist: "Bo", title: "Gone" } }], "gb").trim().split("\n");
+  assert.equal(lines[1], "Bo,Gone,,,,https://music.apple.com/gb/search?term=Gone%20Bo,not found on Apple Music: search for it,");
+});
+
+test("lookUp asks Apple Music first and uses iTunes only after Apple refuses", async () => {
+  const song = (id, name) => ({ id, name, artistName: "Ann" });
+  const apple = [];
+  const appleSearch = async term => { apple.push(term); return apple.length <= 1 ? [song("1", "Hi")] : null; };   // 1st song fine, then refused
+  let itunes = 0;
+  const fetchFn = async () => { itunes++; return { ok: true, status: 200, json: async () => ({ results: [{ trackId: 2, trackName: "Yo", artistName: "Ann" }] }) }; };
+  const stats = {};
+  const tracks = [{ artist: "Ann", title: "Hi" }, { artist: "Ann", title: "Yo" }, { artist: "Ann", title: "Yo" }];
+  const out = await lookUp(tracks.slice(0, 2), { country: "gb", cache: {}, fetchFn, appleSearch, stats, pause: () => {} });
+  assert.deepEqual(out.map(l => l[0].id), ["1", "2"]);
+  assert.deepEqual([stats.apple, stats.itunes], [1, 1]);
+  assert.equal(apple.length, 2, "Apple was tried for the second song, then iTunes took over");
 });
