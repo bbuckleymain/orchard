@@ -1039,6 +1039,24 @@ $("lfmClear").onclick = async () => {
   b.disabled = false;
 };
 
+// Last.fm's name next to the Apple Music song it was matched to, so the right song and version can be checked by eye.
+// Anything where the words differ (a "Live", "Remix" or "Remastered" tag, another artist) is marked and listed first.
+const lfmWords = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+const lfmDiffers = (a, b) => { const x = lfmWords(a), y = lfmWords(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
+function showMatches(matched) {
+  const rows = matched.map(m => ({ m, from: m.from[0], odd: lfmDiffers(m.title, m.from[0].title) || lfmDiffers(m.artist, m.from[0].artist) }))
+                      .sort((a, b) => b.odd - a.odd);
+  const box = $("lfmMatches");
+  box.innerHTML = "";
+  for (const { m, from, odd } of rows) {
+    const row = document.createElement("div");
+    row.style.cssText = "padding:3px 0;border-bottom:1px solid rgba(0,80,140,.15)" + (odd ? ";font-weight:600" : "");
+    row.textContent = `${odd ? "⚠ " : ""}Last.fm: ${from.artist} – ${from.title}  →  Apple Music: ${m.artist} – ${m.title}${m.album ? ` (${m.album})` : ""}${m.from.length > 1 ? `  [+${m.from.length - 1} more Last.fm entries]` : ""}`;
+    box.appendChild(row);
+  }
+  $("lfmMatchesHead").textContent = `Matches to check (${rows.filter(r => r.odd).length} differ, ${rows.length} in all)`;
+}
+
 $("lfmPreview").onclick = async () => {
   if (!music?.isAuthorized) { lfmNote("Sign in to Apple Music first (Account, above)."); return; }
   lfm = null; $("lfmTest").disabled = $("lfmAdd").disabled = true;
@@ -1050,6 +1068,7 @@ $("lfmPreview").onclick = async () => {
     lfmNote("Checking which are already favourites…");
     const fresh = await notFavourited(r.matched);
     lfm = { fresh };
+    showMatches(r.matched);
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
     lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add.`);
     $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;

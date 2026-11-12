@@ -40,7 +40,7 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
         await pause(60000);   // limited: wait a minute
       }
       if (!r.ok) { save(); throw new Error(`iTunes search answered ${r.status}; run Preview again in a few minutes, your progress is saved`); }
-      cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName }));
+      cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName }));
       await pause(GAP);
       if (i % 20 === 19) save();
     }
@@ -53,14 +53,14 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 
 // Picks the Apple song for each Last.fm track from lookUp's results. candidates[i] is the list of { id, name, artistName } for tracks[i].
 // Returns { matched: [{ id, artist, title }], unmatched: [track] }. Two Last.fm entries that land on the same Apple song count once.
-// Each matched song carries `keys`, the Last.fm entries that led to it, for the favourited log.
+// Each matched song carries `from` (the Last.fm entries that led to it, to compare by eye) and `keys` (for the favourited log).
 function pick(tracks, candidates, country) {
   const found = new Map(), unmatched = [];
   tracks.forEach((t, i) => {
     const song = (candidates[i] || []).find(c => matches(c.name, c.artistName, 0, t.title, t.artist, 0));
     if (!song) unmatched.push(t);
-    else if (found.has(song.id)) found.get(song.id).keys.push(keyOf(country, t));
-    else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, keys: [keyOf(country, t)] });
+    else if (found.has(song.id)) { const m = found.get(song.id); m.keys.push(keyOf(country, t)); m.from.push(t); }
+    else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, album: song.album, keys: [keyOf(country, t)], from: [t] });
   });
   return { matched: [...found.values()], unmatched };
 }
