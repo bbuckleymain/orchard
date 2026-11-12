@@ -53,6 +53,10 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 
 // Picks the Apple song for each Last.fm track from lookUp's results. candidates[i] is the list of { id, name, artistName } for tracks[i].
 // Returns { matched: [{ id, artist, title }], unmatched: [track] }. Two Last.fm entries that land on the same Apple song count once.
+// Do two names differ in their words? Catches a "Live", "Remix" or "Remastered" tag, or another artist.
+const words = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+const differs = (a, b) => { const x = words(a), y = words(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
+
 // Each matched song carries `from` (the Last.fm entries that led to it, to compare by eye) and `keys` (for the favourited log).
 function pick(tracks, candidates, country) {
   const found = new Map(), unmatched = [];
@@ -60,9 +64,22 @@ function pick(tracks, candidates, country) {
     const song = (candidates[i] || []).find(c => matches(c.name, c.artistName, 0, t.title, t.artist, 0));
     if (!song) unmatched.push(t);
     else if (found.has(song.id)) { const m = found.get(song.id); m.keys.push(keyOf(country, t)); m.from.push(t); }
-    else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, album: song.album, keys: [keyOf(country, t)], from: [t] });
+    else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, album: song.album, keys: [keyOf(country, t)], from: [t],
+                              odd: differs(song.name, t.title) || differs(song.artistName, t.artist) });
   });
   return { matched: [...found.values()], unmatched };
 }
 
-module.exports = { topTracks, lookUp, pick, keyOf };
+// The matches as CSV for checking by eye: differing ones first, then songs not found, then the rest.
+function toCsv(matched, unmatched) {
+  const rows = [];
+  for (const m of matched) for (const f of m.from)
+    rows.push([m.odd ? "CHECK" : "ok", f.artist, f.title, f.plays, m.artist, m.title, m.album || "", m.id]);
+  for (const t of unmatched) rows.push(["NOT FOUND", t.artist, t.title, t.plays, "", "", "", ""]);
+  const rank = { CHECK: 0, "NOT FOUND": 1, ok: 2 };
+  rows.sort((a, b) => rank[a[0]] - rank[b[0]]);
+  const cell = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
+  return [["status", "lastfm_artist", "lastfm_title", "plays", "apple_artist", "apple_title", "apple_album", "apple_id"], ...rows].map(r => r.map(cell).join(",")).join("\n") + "\n";
+}
+
+module.exports = { topTracks, lookUp, pick, keyOf, toCsv };

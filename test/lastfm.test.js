@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { topTracks, lookUp, pick } = require("../lastfm.js");
+const { topTracks, lookUp, pick, toCsv } = require("../lastfm.js");
 
 const reply = body => async () => ({ ok: true, status: 200, json: async () => body });
 const track = (name, artist, plays) => ({ name, artist: { name: artist }, playcount: String(plays) });
@@ -40,4 +40,16 @@ test("lookUp searches iTunes once per song, reuses the cache and waits out a 429
   assert.deepEqual(waits, [60000, 3200], "a minute after the 429, then the normal gap");
   await lookUp(tracks, { country: "gb", cache, fetchFn, pause: ms => waits.push(ms) });
   assert.equal(urls.length, 2, "second run came from the cache");
+});
+
+test("toCsv lists differing matches first and quotes commas", () => {
+  const same = { id: "1", artist: "Ann", title: "Hi", album: "A, B", from: [{ artist: "Ann", title: "Hi", plays: 20 }], odd: false };
+  const live = { id: "2", artist: "Ann", title: "Yo (Live)", album: "", from: [{ artist: "Ann", title: "Yo", plays: 15 }], odd: true };
+  const lines = toCsv([same, live], [{ artist: "Bo", title: "Gone", plays: 11 }]).trim().split("\n");
+  assert.deepEqual(lines.slice(1), ["CHECK,Ann,Yo,15,Ann,Yo (Live),,2", "NOT FOUND,Bo,Gone,11,,,,", 'ok,Ann,Hi,20,Ann,Hi,"A, B",1']);
+});
+
+test("pick marks a different version as odd", () => {
+  const r = pick([{ artist: "Ann", title: "Yo", plays: 15 }], [[{ id: "2", name: "Yo (Live)", artistName: "Ann" }]], "gb");
+  assert.equal(r.matched[0].odd, true);
 });

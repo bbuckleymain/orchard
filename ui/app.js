@@ -1041,10 +1041,9 @@ $("lfmClear").onclick = async () => {
 
 // Last.fm's name next to the Apple Music song it was matched to, so the right song and version can be checked by eye.
 // Anything where the words differ (a "Live", "Remix" or "Remastered" tag, another artist) is marked and listed first.
-const lfmWords = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
-const lfmDiffers = (a, b) => { const x = lfmWords(a), y = lfmWords(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
+// The same list is saved by the main process as a CSV file.
 function showMatches(matched) {
-  const rows = matched.map(m => ({ m, from: m.from[0], odd: lfmDiffers(m.title, m.from[0].title) || lfmDiffers(m.artist, m.from[0].artist) }))
+  const rows = matched.map(m => ({ m, from: m.from[0], odd: m.odd }))
                       .sort((a, b) => b.odd - a.odd);
   const box = $("lfmMatches");
   box.innerHTML = "";
@@ -1070,7 +1069,7 @@ $("lfmPreview").onclick = async () => {
     lfm = { fresh };
     showMatches(r.matched);
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
-    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add.`);
+    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add. List saved to ${r.file}`);
     $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;
   } catch (e) { lfmError(e); }
 };

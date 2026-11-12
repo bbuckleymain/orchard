@@ -191,7 +191,11 @@ ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
     country, cache, save,
     onProgress: (done, total) => win?.webContents.send("lastfm-progress", { done, total }),
   });
-  return { total: all.length, logged: all.length - tracks.length, ...lastfm.pick(tracks, candidates, country) };
+  const picked = lastfm.pick(tracks, candidates, country);
+  // Saved so the matches can be checked afterwards, by you or by Claude: ~/.config/Orchard/lastfm-matches.csv
+  const file = path.join(app.getPath("userData"), "lastfm-matches.csv");
+  try { fs.writeFileSync(file, lastfm.toCsv(picked.matched, picked.unmatched)); } catch {}
+  return { total: all.length, logged: all.length - tracks.length, file, ...picked };
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
