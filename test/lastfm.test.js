@@ -113,5 +113,7 @@ test("remaster tags are not differences, other tags are", () => {
 
 test("toManualCsv gives each set-aside song a link", () => {
   const lines = toManualCsv([{ id: "5", artist: "Ann", title: "Hi (Acoustic)", album: "Alb", from: { artist: "Ann", title: "Hi" } }], "gb").trim().split("\n");
-  assert.equal(lines[1], "Ann,Hi,Ann,Hi (Acoustic),Alb,https://music.apple.com/gb/song/5");
+  assert.equal(lines[1], "Ann,Hi,Ann,Hi (Acoustic),Alb,https://music.apple.com/gb/song/5,");
+  const done = toManualCsv([{ id: "5", artist: "Ann", title: "Hi", album: "", added: true, from: { artist: "Ann", title: "Hi" } }], "gb");
+  assert.ok(done.trim().endsWith(",yes"));
 });

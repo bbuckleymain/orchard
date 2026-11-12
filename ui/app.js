@@ -1214,16 +1214,27 @@ function lfmButtons() {
 }
 
 // Set aside = never added automatically and not searched again; listed (here and in a file) to favourite by hand.
+// Tick a song once you've favourited it yourself: it stays in the list, struck through, and is saved in the file too.
 function showByHand(list) {
-  $("lfmHandHead").textContent = `To add by hand (${list.length})`;
+  const head = () => { $("lfmHandHead").textContent = `To add by hand (${list.filter(e => !e.added).length} left of ${list.length})`; };
   const box = $("lfmHand");
   box.innerHTML = "";
   for (const e of list) {
-    const row = document.createElement("div");
-    row.style.cssText = "padding:3px 0;border-bottom:1px solid rgba(0,80,140,.15)";
-    row.textContent = `Last.fm: ${e.from.artist} – ${e.from.title}  →  Apple Music: ${e.artist} – ${e.title}${e.album ? ` (${e.album})` : ""}`;
+    const row = document.createElement("label"), tick = document.createElement("input"), text = document.createElement("span");
+    row.style.cssText = "display:flex;gap:6px;align-items:flex-start;padding:3px 0;border-bottom:1px solid rgba(0,80,140,.15)";
+    tick.type = "checkbox"; tick.checked = !!e.added;
+    text.textContent = `Last.fm: ${e.from.artist} – ${e.from.title}  →  Apple Music: ${e.artist} – ${e.title}${e.album ? ` (${e.album})` : ""}`;
+    const strike = () => { text.style.textDecoration = e.added ? "line-through" : ""; text.style.opacity = e.added ? ".6" : ""; };
+    strike();
+    tick.onchange = async () => {
+      const added = tick.checked;
+      try { await glass.lastfmHandMark({ id: e.id, added, country: music.storefrontId }); e.added = added; strike(); head(); }
+      catch (err) { tick.checked = !added; lfmError(err); }
+    };
+    row.append(tick, text);
     box.appendChild(row);
   }
+  head();
 }
 $("lfmSelExact").onclick = () => { if (!lfm) return; lfm.fresh.filter(m => !m.odd).forEach(m => lfm.selected.add(m.id)); showMatches(); };
 $("lfmSelNone").onclick = () => { if (!lfm) return; lfm.selected.clear(); showMatches(); };

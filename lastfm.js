@@ -118,8 +118,8 @@ const csv = rows => {
 
 // The set-aside songs (matches that differ from the Last.fm name) with a link each, for adding to favourites by hand.
 function toManualCsv(entries, country) {
-  return csv([["lastfm_artist", "lastfm_title", "apple_artist", "apple_title", "apple_album", "link"],
-              ...entries.map(e => [e.from.artist, e.from.title, e.artist, e.title, e.album, `https://music.apple.com/${country}/song/${e.id}`])]);
+  return csv([["lastfm_artist", "lastfm_title", "apple_artist", "apple_title", "apple_album", "link", "added_by_hand"],
+              ...entries.map(e => [e.from.artist, e.from.title, e.artist, e.title, e.album, `https://music.apple.com/${country}/song/${e.id}`, e.added ? "yes" : ""])]);
 }
 
 module.exports = { topTracks, lookUp, pick, keyOf, toCsv, toManualCsv };

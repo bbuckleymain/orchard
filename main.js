@@ -183,15 +183,24 @@ ipcMain.handle("lastfm-log-forget", (_e, ids) => {   // a song that's no longer 
 const blacklistFile = path.join(app.getPath("userData"), "lastfm-blacklist.json");
 const readBlacklist = () => { try { return JSON.parse(fs.readFileSync(blacklistFile, "utf8")); } catch { return {}; } };
 const byHand = blacklist => [...new Map(Object.values(blacklist).map(e => [e.id, e])).values()];
-ipcMain.handle("lastfm-blacklist", (_e, { items, country }) => {
-  country = String(country || "us").toLowerCase().slice(0, 2);
-  const blacklist = readBlacklist();
-  for (const m of items)
-    for (const [i, key] of m.keys.entries()) blacklist[key] = { id: m.id, artist: m.artist, title: m.title, album: m.album || "", from: m.from[i] || m.from[0] };
+const saveByHand = (blacklist, country) => {
   fs.writeFileSync(blacklistFile, JSON.stringify(blacklist));
   const list = byHand(blacklist), file = path.join(app.getPath("userData"), "lastfm-by-hand.csv");
-  fs.writeFileSync(file, lastfm.toManualCsv(list, country));
+  fs.writeFileSync(file, lastfm.toManualCsv(list, String(country || "us").toLowerCase().slice(0, 2)));
   return { list, file };
+};
+// Ticking a song as added by hand: kept in the list, marked, and written to the file.
+ipcMain.handle("lastfm-hand-mark", (_e, { id, added, country }) => {
+  const blacklist = readBlacklist();
+  for (const e of Object.values(blacklist)) if (e.id === id) e.added = !!added;
+  return saveByHand(blacklist, country);
+});
+ipcMain.handle("lastfm-blacklist", (_e, { items, country }) => {
+  const blacklist = readBlacklist();
+  for (const m of items)
+    for (const [i, key] of m.keys.entries())
+      blacklist[key] = { id: m.id, artist: m.artist, title: m.title, album: m.album || "", from: m.from[i] || m.from[0], added: blacklist[key]?.added };
+  return saveByHand(blacklist, country);
 });
 ipcMain.handle("lastfm-log-clear", () => fs.writeFileSync(favLog, "{}"));
 
