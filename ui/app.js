@@ -150,8 +150,13 @@ async function search(term) {
     return paged(`/v1/catalog/${link[1]}/${link[2]}s/${link[3]}/tracks`, { limit: 100 });
   }
   const kinds = searchType === "all" ? ["songs", "artists", "albums", "playlists"] : [searchType];
-  const r = await music.api.music("/v1/catalog/{{storefrontId}}/search", { term, types: kinds.join(","), limit: searchType === "all" ? 8 : 25 });
-  const results = r.data?.results || {};
+  let results;
+  try {
+    results = (await music.api.music("/v1/catalog/{{storefrontId}}/search", { term, types: kinds.join(","), limit: searchType === "all" ? 8 : 25 })).data?.results || {};
+  } catch (e) {
+    if (!/429/.test(e?.message || e)) throw e;
+    return itunesSearch(term, kinds);   // Apple Music's own search is limiting this connection
+  }
   const names = { songs: "Songs", artists: "Artists", albums: "Albums", playlists: "Playlists" };
   const out = [];
   for (const kind of kinds) {
@@ -161,6 +166,28 @@ async function search(term) {
     out.push(...found);
   }
   return out;
+}
+
+// Apple Music's search sometimes answers 429 for hours. The public iTunes search finds the same songs, albums and artists
+// (its ids are the Apple Music ids), except playlists, so it stands in until Apple lets searches through again.
+async function itunesSearch(term, kinds) {
+  const country = (music.storefrontId || "us").slice(0, 2), limit = kinds.length > 1 ? 8 : 25;
+  const cover = url => url ? { url: url.replace(/\d+x\d+bb/, "{w}x{h}bb") } : null;
+  const ask = async (entity, name, make) => {
+    const r = await fetch("https://itunes.apple.com/search?" + new URLSearchParams({ term, entity, limit, country }));
+    if (!r.ok) throw new Error(`Search answered ${r.status}`);
+    const found = ((await r.json()).results || []).map(make);
+    return found.length ? [{ kind: "header", title: name }, ...found] : [];
+  };
+  const makers = {
+    songs: () => ask("song", "Songs", s => ({ kind: "song", id: String(s.trackId), lib: false, playId: String(s.trackId), title: s.trackName, artist: s.artistName, art: cover(s.artworkUrl100), ms: s.trackTimeMillis || 0 })),
+    albums: () => ask("album", "Albums", a => ({ kind: "album", id: String(a.collectionId), lib: false, title: a.collectionName, artist: a.artistName, art: cover(a.artworkUrl100) })),
+    artists: () => ask("musicArtist", "Artists", a => ({ kind: "artist", id: String(a.artistId), lib: false, catalogId: String(a.artistId), title: a.artistName, artist: "Artist", art: null })),
+  };
+  const out = (await Promise.all(["songs", "artists", "albums"].filter(k => kinds.includes(k)).map(k => makers[k]()))).flat();
+  const list = kinds.length > 1 ? out : out.filter(x => x.kind !== "header");
+  list.note = "Apple Music's search is limiting this connection, so these come from iTunes search (no playlists).";
+  return list;
 }
 
 // ---- your library ----
