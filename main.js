@@ -226,6 +226,9 @@ ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
     appleSearch: async (term, limit) => {
       try { return await win.webContents.executeJavaScript(`window.appleSearch(${JSON.stringify(term)}, ${limit})`); } catch { return null; }
     },
+    appleIsrc: async isrc => {
+      try { return await win.webContents.executeJavaScript(`window.appleIsrc(${JSON.stringify(isrc)})`); } catch { return null; }
+    },
     onProgress: (done, total) => win?.webContents.send("lastfm-progress", { done, total }),
   });
   const picked = lastfm.pick(tracks, candidates, country);

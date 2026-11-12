@@ -136,3 +136,28 @@ test("lookUp asks Apple Music first and uses iTunes only after Apple refuses", a
   assert.deepEqual([stats.apple, stats.itunes], [1, 1]);
   assert.equal(apple.length, 2, "Apple was tried for the second song, then iTunes took over");
 });
+
+test("featured artists and remaster tags are not differences", () => {
+  const odd = (name, artist, title, by) => pick([{ artist: by, title, plays: 9 }], [[{ id: "1", name, artistName: artist }]], "gb").matched[0].odd;
+  assert.equal(odd("Hi", "Ann", "Hi (feat. Bo)", "Ann"), false);
+  assert.equal(odd("Hi (feat. Bo)", "Ann", "Hi", "Ann"), false);
+  assert.equal(odd("Hi", "Ann", "Hi", "Ann, Bo"), false, "first artist");
+  assert.equal(pick([{ artist: "Ann, Bo", title: "Hi", plays: 9 }], [[{ id: "1", name: "Hi", artistName: "Cy" }]], "gb").matched.length, 0, "a different artist is not matched");
+});
+
+test("lookUp tries the cleaned-up query, then the ISRC, and trusts an ISRC match", async () => {
+  const terms = [], isrcs = [];
+  const fetchFn = async url => {
+    if (url.includes("musicbrainz")) return { ok: true, status: 200, json: async () => ({ isrcs: ["XX1"] }) };
+    terms.push(new URL(url).searchParams.get("term"));
+    return { ok: true, status: 200, json: async () => ({ results: [] }) };
+  };
+  const appleIsrc = async isrc => { isrcs.push(isrc); return [{ id: "9", name: "Hi (Some Mix)", artistName: "Ann" }]; };
+  const t = { artist: "Ann, Bo", title: "Hi (feat. Bo)", plays: 9, mbid: "abc" };
+  const [list] = await lookUp([t], { country: "gb", cache: {}, fetchFn, appleIsrc, pause: () => {} });
+  assert.ok(terms.includes("Hi Ann"), "cleaned query: no feat, first artist");
+  assert.deepEqual(isrcs, ["XX1"]);
+  const r = pick([t], [list], "gb");
+  assert.equal(r.matched[0].id, "9");
+  assert.equal(r.matched[0].odd, false, "found by ISRC, so no differences");
+});

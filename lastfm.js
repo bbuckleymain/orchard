@@ -17,7 +17,7 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
     pages = +j.toptracks?.["@attr"]?.totalPages || 1;
     for (const t of j.toptracks?.track || []) {
       if (+t.playcount < min) return out;
-      out.push({ artist: t.artist.name, title: t.name, plays: +t.playcount });
+      out.push({ artist: t.artist.name, title: t.name, plays: +t.playcount, mbid: t.mbid || "" });
     }
   }
   return out;
@@ -28,7 +28,7 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
 // (artist|title -> candidates) is filled as it goes, so a run that is stopped or limited carries on where it left off.
 const keyOf = (country, t) => `${country}|${t.artist}|${t.title}`.toLowerCase();
 
-async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep, appleSearch = async () => null, stats = {} }) {
+async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep, appleSearch = async () => null, appleIsrc = async () => null, stats = {} }) {
   const out = [];
   stats.apple = stats.apple || 0; stats.itunes = stats.itunes || 0;
 
@@ -60,21 +60,44 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
     return itunes(step.itunes);
   }
 
+  // MusicBrainz: the ISRCs (recording codes) of a recording, by the MusicBrainz id Last.fm gives. One request a second.
+  async function isrcsOf(mbid) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetchFn(`https://musicbrainz.org/ws/2/recording/${mbid}?inc=isrcs&fmt=json`, { headers: { "User-Agent": "Orchard/1.0 (https://github.com/bbuckleymain/orchard)" }, signal: AbortSignal.timeout(20000) });
+        await pause(1100);
+        if (r.status === 503) { await pause(2000); continue; }
+        return r.ok ? ((await r.json()).isrcs || []) : [];
+      } catch { return []; }
+    }
+    return [];
+  }
+
   try {
     for (const [i, t] of tracks.entries()) {
-      const key = "v3|" + keyOf(country, t);   // v3: keeps searching, with wider queries, until a result has no differences
+      const key = "v4|" + keyOf(country, t);   // v4: cleaned-up queries and the ISRC last resort
+      const old = cache["v3|" + keyOf(country, t)];
+      if (!cache[key] && old?.some(c => isExact(c, t))) cache[key] = old;   // a v3 result that was already exact stays good
       if (!cache[key]) {
-        const both = `${t.title} ${t.artist}`;
+        const both = `${t.title} ${t.artist}`, clean = `${tidy(t.title)} ${primaryArtist(t.artist)}`;
         const steps = [
           { term: both, apple: 10, itunes: { term: both, limit: "8" } },
           { term: both, apple: 25, itunes: { term: both, limit: "50" } },
           { term: t.title, apple: 25, itunes: { term: t.title, attribute: "songTerm", limit: "100" } },
-        ];
+          { term: clean, apple: 25, itunes: { term: clean, limit: "50" } },                                          // no "(feat. …)", first artist only
+          { term: tidy(t.title), apple: 25, itunes: { term: tidy(t.title), attribute: "songTerm", limit: "100" } },
+        ].filter((step, n, all) => all.findIndex(o => o.term === step.term && o.apple === step.apple) === n);
         let list = [];
         for (const [n, step] of steps.entries()) {
           if (n && list.some(c => isExact(c, t))) break;
           const more = await ask(i, step);
           list = [...list, ...more.filter(m => !list.some(c => c.id === m.id))];
+        }
+        if (t.mbid && !list.some(c => isExact(c, t))) {   // last resort: look the recording up by its ISRC
+          for (const isrc of (await isrcsOf(t.mbid)).slice(0, 3)) {
+            const found = await appleIsrc(isrc);
+            if (found?.length) { stats.isrc = (stats.isrc || 0) + 1; list = [...found.map(c => ({ ...c, byIsrc: true })), ...list]; break; }
+          }
         }
         cache[key] = list;
         if (i % 20 === 19) save();
@@ -90,9 +113,16 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 const words = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
 // "Remastered", "(2011 Remaster)" and "- Remastered 2009" are fine, so they are not counted.
 const REMASTER = /\s*[(\[–-]\s*(?:\d{4}\s+)?(?:digital\s+)?remaster(?:ed)?(?:\s+(?:version|\d{4}))*\s*[)\]]?/gi;
-const differs = (a, b) => { const x = words(String(a || "").replace(REMASTER, "")), y = words(String(b || "").replace(REMASTER, "")); return x.size !== y.size || [...x].some(w => !y.has(w)); };
-// A result that is the right song, not live or clean, and has no differences.
-const isExact = (c, t) => matches(c.name, c.artistName, 0, t.title, t.artist, 0) && !badVersion(c, t) && !differs(c.name, t.title) && !differs(c.artistName, t.artist);
+// "(feat. X)", "[ft. X]", "- feat. X" and a trailing "feat. X" are credits, not part of the song's name.
+const FEAT = [/\s*[(\[]\s*(?:feat\.?|ft\.?|featuring|with)\s[^)\]]*[)\]]/gi, /\s*[-–]\s*(?:feat\.?|ft\.?|featuring)\s.*$/i, /\s+(?:feat\.?|ft\.?|featuring)\s.*$/i];
+const tidy = text => FEAT.reduce((t, re) => t.replace(re, ""), String(text || "").replace(REMASTER, "")).trim();
+// The first artist of "A, B", "A & B", "A feat. B" or "A x B".
+const primaryArtist = artist => String(artist || "").split(/\s*(?:,|&|\bfeat\.?|\bft\.?|\bfeaturing\b|\bx\b|\band\b)\s*/i)[0].trim() || String(artist || "");
+const differs = (a, b) => { const x = words(tidy(a)), y = words(tidy(b)); return x.size !== y.size || [...x].some(w => !y.has(w)); };
+// A result that is the right song, not live or clean, and has no differences. One found by ISRC (the recording's own
+// code) is the right recording whatever it is called.
+const isExact = (c, t) => !!c.byIsrc || (matches(tidy(c.name), c.artistName, 0, tidy(t.title), t.artist, 0) && !badVersion(c, t) && !differs(c.name, t.title)
+  && (!differs(c.artistName, t.artist) || !differs(c.artistName, primaryArtist(t.artist))));
 
 // Live and clean versions are never picked. A word in the song's own title doesn't count against it ("Live Forever",
 // "Clean"): a version is rejected only when it has more "live" / "clean" words than the Last.fm title does, or when the
@@ -111,12 +141,12 @@ function badVersion(c, t) {
 function pick(tracks, candidates, country) {
   const found = new Map(), unmatched = [];
   tracks.forEach((t, i) => {
-    const fits = c => matches(c.name, c.artistName, 0, t.title, t.artist, 0);
+    const fits = c => matches(tidy(c.name), c.artistName, 0, tidy(t.title), t.artist, 0);
     const song = (candidates[i] || []).find(c => isExact(c, t)) || (candidates[i] || []).find(c => !badVersion(c, t) && fits(c));
     if (!song) unmatched.push((candidates[i] || []).some(c => badVersion(c, t) && fits(c)) ? { ...t, onlyLiveOrClean: true } : t);
     else if (found.has(song.id)) { const m = found.get(song.id); m.keys.push(keyOf(country, t)); m.from.push(t); }
     else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, album: song.album, keys: [keyOf(country, t)], from: [t],
-                              odd: differs(song.name, t.title) || differs(song.artistName, t.artist) });
+                              odd: !isExact(song, t) });
   });
   return { matched: [...found.values()], unmatched };
 }
