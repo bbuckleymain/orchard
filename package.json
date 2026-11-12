@@ -30,6 +30,7 @@
       "main.js",
       "preload.js",
       "lyrics-sources.js",
+      "lastfm.js",
       "mpris.js",
       "musixmatch.js",
       "package.json",
