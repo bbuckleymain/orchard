@@ -165,14 +165,13 @@ ipcMain.handle("musixmatch-key", (_e, key) => {
 // Most-played Last.fm songs, found on Apple Music. The UI then favourites them with your Apple sign-in.
 ipcMain.handle("lastfm-status", () => !!loadSecret("lastfm"));
 ipcMain.handle("lastfm-key", (_e, key) => { saveSecret("lastfm", String(key || "").trim()); return !!loadSecret("lastfm"); });
-ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
+ipcMain.handle("lastfm-tracks", (_e, { user, min }) => {
   const key = loadSecret("lastfm");
   user = String(user || "").trim();
   if (!key || !user) throw new Error("Enter your Last.fm username and save your API key first.");
-  const tracks = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
-  const storefront = (loadAccount()?.storefront || "us").toLowerCase();
-  return { total: tracks.length, ...(await lastfm.matchAll(tracks, { token: await token(), storefront })) };
+  return lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
 });
+ipcMain.handle("lastfm-pick", (_e, { tracks, candidates }) => lastfm.pick(tracks, candidates));
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
 ipcMain.on("window", (_e, action) => {

@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { topTracks, matchAll } = require("../lastfm.js");
+const { topTracks, pick } = require("../lastfm.js");
 
 const reply = body => async () => ({ ok: true, status: 200, json: async () => body });
 const track = (name, artist, plays) => ({ name, artist: { name: artist }, playcount: String(plays) });
@@ -18,26 +18,11 @@ test("topTracks turns a Last.fm error into an Error", async () => {
   await assert.rejects(topTracks({ user: "u", key: "k", min: 10, fetchFn: reply({ error: 6, message: "User not found" }) }), /User not found/);
 });
 
-test("matchAll skips wrong songs and counts the same Apple song once", async () => {
-  const song = (id, name, artistName) => ({ id, attributes: { name, artistName } });
-  const fetchFn = async url => {
-    const term = new URL(url).searchParams.get("term");
-    const data = term.startsWith("Gone") ? [] : term.startsWith("Hi") ? [song("1", "Other Song", "Zed"), song("2", "Hi There", "Ann")] : [];
-    return reply({ results: { songs: { data } } })();
-  };
+test("pick skips wrong songs and counts the same Apple song once", () => {
+  const c = (id, name, artistName) => ({ id, name, artistName });
   const tracks = [{ artist: "Ann", title: "Hi There", plays: 20 }, { artist: "Ann", title: "Hi There (live)", plays: 12 }, { artist: "Bo", title: "Gone", plays: 11 }];
-  const r = await matchAll(tracks, { token: "t", storefront: "us", fetchFn });
-  assert.deepEqual(r.matched.map(s => s.id), ["2"]);
+  const candidates = [[c("1", "Other Song", "Zed"), c("2", "Hi There", "Ann")], [c("2", "Hi There", "Ann")], []];
+  const r = pick(tracks, candidates);
+  assert.deepEqual(r.matched, [{ id: "2", artist: "Ann", title: "Hi There" }]);
   assert.deepEqual(r.unmatched.map(t => t.title), ["Gone"]);
-});
-
-test("matchAll waits and retries when Apple says 429", async () => {
-  let calls = 0;
-  const waits = [];
-  const fetchFn = async () => ++calls < 3
-    ? { ok: false, status: 429, headers: { get: () => null } }
-    : reply({ results: { songs: { data: [{ id: "9", attributes: { name: "Hi", artistName: "Ann" } }] } } })();
-  const r = await matchAll([{ artist: "Ann", title: "Hi", plays: 10 }], { token: "t", storefront: "us", fetchFn, pause: ms => waits.push(ms) });
-  assert.deepEqual(r.matched.map(s => s.id), ["9"]);
-  assert.deepEqual(waits, [1000, 2000]);
 });

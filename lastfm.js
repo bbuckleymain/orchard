@@ -1,8 +1,7 @@
-// Your most-played Last.fm tracks, found on Apple Music. Reads only: nothing is changed on either service here.
+// Your most-played Last.fm tracks, matched to Apple Music songs. Reads only: nothing is changed on either service here.
 const { matches } = require("./musixmatch");
 
 const TIMEOUT = 15000;
-const sleep = ms => new Promise(done => setTimeout(done, ms));
 
 // Every track played `min` times or more, most played first. Last.fm lists them in that order, so reading stops
 // at the first page that drops below `min`.
@@ -21,35 +20,17 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
   return out;
 }
 
-// Finds each track in the Apple Music catalog. Returns { matched: [{ id, artist, title }], unmatched: [track] }.
-// Two Last.fm entries that land on the same Apple song count once.
-async function matchAll(tracks, { token, storefront, fetchFn = fetch, pause = sleep }) {
-  const headers = { Authorization: "Bearer " + token, Origin: "https://music.apple.com", Referer: "https://music.apple.com/" };
-  async function find(t) {
-    const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/search?` + new URLSearchParams({ term: `${t.title} ${t.artist}`, types: "songs", limit: "5" });
-    let r;
-    // Apple answers 429 when asked too fast: wait as long as it says (or longer each time) and try again.
-    for (let attempt = 0; attempt < 6; attempt++) {
-      r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
-      if (r.status !== 429) break;
-      await pause((+r.headers?.get("retry-after") || 2 ** attempt) * 1000);
-    }
-    if (!r.ok) throw new Error(`Apple Music answered ${r.status}`);
-    const songs = (await r.json()).results?.songs?.data || [];
-    return songs.find(s => matches(s.attributes.name, s.attributes.artistName, 0, t.title, t.artist, 0));
-  }
-
+// Picks the Apple song for each Last.fm track from the search results the window fetched (Apple only answers
+// searches from the browser window, not from here). candidates[i] is the list of { id, name, artistName } for tracks[i].
+// Returns { matched: [{ id, artist, title }], unmatched: [track] }. Two Last.fm entries that land on the same Apple song count once.
+function pick(tracks, candidates) {
   const found = new Map(), unmatched = [];
-  let next = 0;
-  const worker = async () => {
-    while (next < tracks.length) {
-      const t = tracks[next++], song = await find(t);
-      if (song) found.set(song.id, { id: song.id, artist: song.attributes.artistName, title: song.attributes.name });
-      else unmatched.push(t);
-    }
-  };
-  await Promise.all(Array.from({ length: 2 }, worker));
+  tracks.forEach((t, i) => {
+    const song = (candidates[i] || []).find(c => matches(c.name, c.artistName, 0, t.title, t.artist, 0));
+    if (song) found.set(song.id, { id: song.id, artist: song.artistName, title: song.name });
+    else unmatched.push(t);
+  });
   return { matched: [...found.values()], unmatched };
 }
 
-module.exports = { topTracks, matchAll };
+module.exports = { topTracks, pick };

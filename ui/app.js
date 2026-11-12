@@ -1037,6 +1037,22 @@ $("lfmClear").onclick = async () => {
   b.disabled = false;
 };
 
+// Apple's search answers the app window only, so it's asked here and lastfm.js picks the matches.
+async function candidatesFor(tracks) {
+  const out = new Array(tracks.length), sf = music.storefrontId || "us";
+  let next = 0, done = 0;
+  const worker = async () => {
+    while (next < tracks.length) {
+      const i = next++, t = tracks[i];
+      const r = await amp("GET", `/v1/catalog/${sf}/search?` + new URLSearchParams({ term: `${t.title} ${t.artist}`, types: "songs", limit: "5" }));
+      out[i] = (r?.results?.songs?.data || []).map(s => ({ id: s.id, name: s.attributes.name, artistName: s.attributes.artistName }));
+      if (++done % 25 === 0) lfmNote(`Finding songs on Apple Music: ${done} of ${tracks.length}…`);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return out;
+}
+
 $("lfmPreview").onclick = async () => {
   if (!music?.isAuthorized) { lfmNote("Sign in to Apple Music first (Account, above)."); return; }
   lfm = null; $("lfmTest").disabled = $("lfmAdd").disabled = true;
@@ -1044,7 +1060,9 @@ $("lfmPreview").onclick = async () => {
   lfmNote("Reading Last.fm and finding the songs on Apple Music…");
   try {
     const min = +$("lfmMin").value || 10;
-    const r = await glass.lastfmMatch({ user: $("lfmUser").value, min });
+    const tracks = await glass.lastfmTracks({ user: $("lfmUser").value, min });
+    const r = { total: tracks.length, ...(await glass.lastfmPick({ tracks, candidates: await candidatesFor(tracks) })) };
+    lfmNote("Checking which are already favourites…");
     const fresh = await notFavourited(r.matched);
     lfm = { fresh };
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
