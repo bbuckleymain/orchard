@@ -36,7 +36,7 @@ test("lookUp searches iTunes once per song, reuses the cache and waits out a 429
   const cache = {};
   const tracks = [{ artist: "Ann", title: "Hi" }];
   const first = await lookUp(tracks, { country: "gb", cache, fetchFn, pause: ms => waits.push(ms) });
-  assert.deepEqual(first, [[{ id: "7", name: "Hi", artistName: "Ann", album: "Alb" }]]);
+  assert.deepEqual(first, [[{ id: "7", name: "Hi", artistName: "Ann", album: "Alb", explicit: undefined }]]);
   assert.deepEqual(waits, [60000, 3200], "a minute after the 429, then the normal gap");
   await lookUp(tracks, { country: "gb", cache, fetchFn, pause: ms => waits.push(ms) });
   assert.equal(urls.length, 2, "second run came from the cache");
@@ -50,7 +50,7 @@ test("toCsv lists differing matches first and quotes commas", () => {
 });
 
 test("pick marks a different version as odd", () => {
-  const r = pick([{ artist: "Ann", title: "Yo", plays: 15 }], [[{ id: "2", name: "Yo (Live)", artistName: "Ann" }]], "gb");
+  const r = pick([{ artist: "Ann", title: "Yo", plays: 15 }], [[{ id: "2", name: "Yo (Remastered)", artistName: "Ann" }]], "gb");
   assert.equal(r.matched[0].odd, true);
 });
 
@@ -64,4 +64,15 @@ test("lookUp retries a timed-out search and saves progress when it gives up", as
   const dead = async () => { throw new Error("timeout"); };
   await assert.rejects(lookUp([{ artist: "Bo", title: "X" }], { country: "gb", cache, save: () => saved++, fetchFn: dead, pause: () => {} }), /didn't answer/);
   assert.equal(saved, 1, "saved even though it failed");
+});
+
+test("pick skips live and clean versions but not when the Last.fm name asks for them", () => {
+  const c = (id, name, extra = {}) => ({ id, name, artistName: "Ann", ...extra });
+  const pickOne = (title, cands) => pick([{ artist: "Ann", title, plays: 9 }], [cands], "gb");
+  assert.equal(pickOne("Hi", [c("1", "Hi (Live)"), c("2", "Hi", { explicit: "cleaned" }), c("3", "Hi", { album: "Hits Live at Wembley" }), c("4", "Hi")]).matched[0].id, "4");
+  const only = pickOne("Hi", [c("1", "Hi - Live at Wembley"), c("2", "Hi", { explicit: "cleaned" })]);
+  assert.equal(only.matched.length, 0);
+  assert.equal(only.unmatched[0].onlyLiveOrClean, true);
+  assert.equal(pickOne("Hi (Live)", [c("1", "Hi (Live)")]).matched[0].id, "1", "asked for live");
+  assert.equal(pickOne("Clean", [c("1", "Clean")]).matched[0].id, "1", "a song called Clean");
 });

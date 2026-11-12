@@ -31,9 +31,9 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
   const out = [];
   try {
     for (const [i, t] of tracks.entries()) {
-      const key = keyOf(country, t);
+      const key = "v2|" + keyOf(country, t);   // v2: results now carry the clean/explicit flag and 8 per search
       if (!cache[key]) {
-        const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${t.title} ${t.artist}`, entity: "song", limit: "5", country });
+        const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${t.title} ${t.artist}`, entity: "song", limit: "8", country });
         let r = null;
         for (let attempt = 0; attempt < 4; attempt++) {
           try { r = await fetchFn(url, { signal: AbortSignal.timeout(30000) }); }
@@ -42,7 +42,7 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
           await pause(60000);   // limited: wait a minute
         }
         if (!r?.ok) throw new Error(`iTunes search ${r ? "answered " + r.status : "didn't answer"}; run Preview again in a few minutes, your progress is saved`);
-        cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName }));
+        cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName, explicit: s.trackExplicitness }));
         await pause(GAP);
         if (i % 20 === 19) save();
       }
@@ -57,12 +57,22 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 const words = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
 const differs = (a, b) => { const x = words(a), y = words(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
 
+// Live and clean versions are never picked, unless the Last.fm name itself says "live" or "clean".
+const hasWord = (text, w) => new RegExp(`\\b${w}\\b`, "i").test(text || "");
+const LIVE_ALBUM = /\blive (at|from|in|on)\b|\(live\)|\blive$|unplugged|in concert/i;
+function badVersion(c, t) {
+  if (!hasWord(t.title, "live") && (hasWord(c.name, "live") || LIVE_ALBUM.test(c.album))) return "live";
+  if (!hasWord(t.title, "clean") && (c.explicit === "cleaned" || hasWord(c.name, "clean"))) return "clean";
+  return null;
+}
+
 // Each matched song carries `from` (the Last.fm entries that led to it, to compare by eye) and `keys` (for the favourited log).
 function pick(tracks, candidates, country) {
   const found = new Map(), unmatched = [];
   tracks.forEach((t, i) => {
-    const song = (candidates[i] || []).find(c => matches(c.name, c.artistName, 0, t.title, t.artist, 0));
-    if (!song) unmatched.push(t);
+    const fits = c => matches(c.name, c.artistName, 0, t.title, t.artist, 0);
+    const song = (candidates[i] || []).find(c => !badVersion(c, t) && fits(c));
+    if (!song) unmatched.push((candidates[i] || []).some(c => badVersion(c, t) && fits(c)) ? { ...t, onlyLiveOrClean: true } : t);
     else if (found.has(song.id)) { const m = found.get(song.id); m.keys.push(keyOf(country, t)); m.from.push(t); }
     else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, album: song.album, keys: [keyOf(country, t)], from: [t],
                               odd: differs(song.name, t.title) || differs(song.artistName, t.artist) });
@@ -75,8 +85,8 @@ function toCsv(matched, unmatched) {
   const rows = [];
   for (const m of matched) for (const f of m.from)
     rows.push([m.odd ? "CHECK" : "ok", f.artist, f.title, f.plays, m.artist, m.title, m.album || "", m.id]);
-  for (const t of unmatched) rows.push(["NOT FOUND", t.artist, t.title, t.plays, "", "", "", ""]);
-  const rank = { CHECK: 0, "NOT FOUND": 1, ok: 2 };
+  for (const t of unmatched) rows.push([t.onlyLiveOrClean ? "ONLY LIVE/CLEAN" : "NOT FOUND", t.artist, t.title, t.plays, "", "", "", ""]);
+  const rank = { CHECK: 0, "NOT FOUND": 1, "ONLY LIVE/CLEAN": 1, ok: 2 };
   rows.sort((a, b) => rank[a[0]] - rank[b[0]]);
   const cell = v => /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v);
   return [["status", "lastfm_artist", "lastfm_title", "plays", "apple_artist", "apple_title", "apple_album", "apple_id"], ...rows].map(r => r.map(cell).join(",")).join("\n") + "\n";
