@@ -53,3 +53,15 @@ test("pick marks a different version as odd", () => {
   const r = pick([{ artist: "Ann", title: "Yo", plays: 15 }], [[{ id: "2", name: "Yo (Live)", artistName: "Ann" }]], "gb");
   assert.equal(r.matched[0].odd, true);
 });
+
+test("lookUp retries a timed-out search and saves progress when it gives up", async () => {
+  const ok = { ok: true, status: 200, json: async () => ({ results: [{ trackId: 5, trackName: "Hi", artistName: "Ann", collectionName: "A" }] }) };
+  let calls = 0, saved = 0;
+  const flaky = async () => { if (++calls === 1) throw new Error("The operation was aborted due to timeout"); return ok; };
+  const cache = {};
+  await lookUp([{ artist: "Ann", title: "Hi" }], { country: "gb", cache, fetchFn: flaky, pause: () => {} });
+  assert.equal(calls, 2);
+  const dead = async () => { throw new Error("timeout"); };
+  await assert.rejects(lookUp([{ artist: "Bo", title: "X" }], { country: "gb", cache, save: () => saved++, fetchFn: dead, pause: () => {} }), /didn't answer/);
+  assert.equal(saved, 1, "saved even though it failed");
+});

@@ -29,30 +29,30 @@ const keyOf = (country, t) => `${country}|${t.artist}|${t.title}`.toLowerCase();
 
 async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep }) {
   const out = [];
-  for (const [i, t] of tracks.entries()) {
-    const key = keyOf(country, t);
-    if (!cache[key]) {
-      const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${t.title} ${t.artist}`, entity: "song", limit: "5", country });
-      let r;
-      for (let attempt = 0; attempt < 4; attempt++) {
-        r = await fetchFn(url, { signal: AbortSignal.timeout(TIMEOUT) });
-        if (r.status !== 403 && r.status !== 429) break;
-        await pause(60000);   // limited: wait a minute
+  try {
+    for (const [i, t] of tracks.entries()) {
+      const key = keyOf(country, t);
+      if (!cache[key]) {
+        const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${t.title} ${t.artist}`, entity: "song", limit: "5", country });
+        let r = null;
+        for (let attempt = 0; attempt < 4; attempt++) {
+          try { r = await fetchFn(url, { signal: AbortSignal.timeout(30000) }); }
+          catch { r = null; await pause(5000 * (attempt + 1)); continue; }   // a timeout or dropped connection: try again
+          if (r.status !== 403 && r.status !== 429) break;
+          await pause(60000);   // limited: wait a minute
+        }
+        if (!r?.ok) throw new Error(`iTunes search ${r ? "answered " + r.status : "didn't answer"}; run Preview again in a few minutes, your progress is saved`);
+        cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName }));
+        await pause(GAP);
+        if (i % 20 === 19) save();
       }
-      if (!r.ok) { save(); throw new Error(`iTunes search answered ${r.status}; run Preview again in a few minutes, your progress is saved`); }
-      cache[key] = ((await r.json()).results || []).map(s => ({ id: String(s.trackId), name: s.trackName, artistName: s.artistName, album: s.collectionName }));
-      await pause(GAP);
-      if (i % 20 === 19) save();
+      out.push(cache[key]);
+      onProgress(i + 1, tracks.length);
     }
-    out.push(cache[key]);
-    onProgress(i + 1, tracks.length);
-  }
-  save();
+  } finally { save(); }   // however it stops, what was found so far is kept
   return out;
 }
 
-// Picks the Apple song for each Last.fm track from lookUp's results. candidates[i] is the list of { id, name, artistName } for tracks[i].
-// Returns { matched: [{ id, artist, title }], unmatched: [track] }. Two Last.fm entries that land on the same Apple song count once.
 // Do two names differ in their words? Catches a "Live", "Remix" or "Remastered" tag, or another artist.
 const words = text => new Set(String(text || "").toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
 const differs = (a, b) => { const x = words(a), y = words(b); return x.size !== y.size || [...x].some(w => !y.has(w)); };
