@@ -1160,7 +1160,7 @@ function showMatches(matched) {
 
 $("lfmPreview").onclick = async () => {
   if (!music?.isAuthorized) { lfmNote("Sign in to Apple Music first (Account, above)."); return; }
-  lfm = null; $("lfmTest").disabled = $("lfmAdd").disabled = true;
+  lfm = null; lfmButtons();
   prefs.lastfmUser = $("lfmUser").value.trim(); savePrefs();
   lfmNote("Reading Last.fm and finding the songs on Apple Music. About 20 songs a minute, so this can take a while…");
   try {
@@ -1172,12 +1172,12 @@ $("lfmPreview").onclick = async () => {
     showMatches(r.matched);
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
     lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add. List saved to ${r.file}`);
-    $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;
+    lfmButtons();
   } catch (e) { lfmError(e); }
 };
 
 async function addFavourites(songs) {
-  $("lfmTest").disabled = $("lfmAdd").disabled = true;
+  $("lfmTest").disabled = $("lfmExact").disabled = $("lfmAdd").disabled = true;
   try {
     for (const [n, s] of songs.entries()) {
       await amp("PUT", `/v1/me/ratings/songs/${s.id}`, { type: "rating", attributes: { value: 1 } });
@@ -1187,8 +1187,17 @@ async function addFavourites(songs) {
     }
     lfmNote(`Favourited ${songs.length}: ${songs.slice(0, 3).map(s => `${s.artist} – ${s.title}`).join("; ")}${songs.length > 3 ? "…" : ""}. ${lfm.fresh.length} left.`);
   } catch (e) { lfmError(e); }
-  $("lfmTest").disabled = $("lfmAdd").disabled = !lfm.fresh.length;
+  lfmButtons();
 }
+// "Without differences" = the Apple song's title and artist use the same words as Last.fm's (no Live, Remix, Remastered…).
+function lfmButtons() {
+  const fresh = lfm?.fresh || [];
+  $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;
+  const exact = fresh.filter(m => !m.odd).length;
+  $("lfmExact").disabled = !exact;
+  $("lfmExact").textContent = `Add the ${exact} without differences`;
+}
+$("lfmExact").onclick = () => lfm && addFavourites(lfm.fresh.filter(m => !m.odd));
 $("lfmTest").onclick = () => lfm && addFavourites(lfm.fresh.slice(0, 3));
 $("lfmAdd").onclick = () => lfm && addFavourites([...lfm.fresh]);
 
