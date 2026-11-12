@@ -174,11 +174,16 @@
         <div style="display:flex;gap:8px;margin-top:8px">
           <button class="action" id="lfmPreview">Preview</button>
           <button class="action" id="lfmTest" disabled>Add 3 as a test</button>
-          <button class="action" id="lfmExact" disabled>Add the ones without differences</button>
           <button class="action" id="lfmAdd" disabled>Add all</button>
         </div>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="action" id="lfmSelExact" disabled>Select all without differences</button>
+          <button class="action" id="lfmSelNone" disabled>Select none</button>
+          <button class="action" id="lfmExact" disabled>Add selected (0)</button>
+          <button class="action" id="lfmAside" disabled>Set aside the ones with differences</button>
+        </div>
         <div class="muted" id="lfmStatus" style="margin-top:6px"></div>
-        <details style="margin-top:6px"><summary class="muted" id="lfmMatchesHead">Matches to check</summary><div id="lfmMatches" class="muted" style="max-height:220px;overflow:auto;font-size:12px"></div></details>
+        <details style="margin-top:6px"><summary class="muted" id="lfmMatchesHead">Matches to check</summary><div id="lfmMatches" class="muted" style="max-height:320px;overflow:auto;font-size:12px"></div></details>
         <details style="margin-top:6px"><summary class="muted" id="lfmHandHead">To add by hand</summary><div id="lfmHand" class="muted" style="max-height:220px;overflow:auto;font-size:12px"></div></details>
         <details style="margin-top:6px"><summary class="muted">Songs not found on Apple Music</summary><pre class="muted" id="lfmMissing" style="white-space:pre-wrap;max-height:120px;overflow:auto"></pre></details>
       </div>

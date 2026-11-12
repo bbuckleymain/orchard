@@ -1141,21 +1141,26 @@ $("lfmClear").onclick = async () => {
   b.disabled = false;
 };
 
-// Last.fm's name next to the Apple Music song it was matched to, so the right song and version can be checked by eye.
-// Anything where the words differ (a "Live", "Remix" or "Remastered" tag, another artist) is marked and listed first.
-// The same list is saved by the main process as a CSV file.
-function showMatches(matched) {
-  const rows = matched.map(m => ({ m, from: m.from[0], odd: m.odd }))
-                      .sort((a, b) => b.odd - a.odd);
+// Last.fm's name next to the Apple Music song it was matched to, so the right song and version can be checked by eye,
+// with a tick box on each one that can still be added. Anything where the words differ (a "Live", "Remix" or another
+// artist; remasters don't count) is marked and listed first. The same list is saved by the main process as a CSV file.
+function showMatches() {
+  const { matched, fresh, selected, done, aside } = lfm;
+  const todo = new Set(fresh.map(m => m.id));
   const box = $("lfmMatches");
   box.innerHTML = "";
-  for (const { m, from, odd } of rows) {
-    const row = document.createElement("div");
-    row.style.cssText = "padding:3px 0;border-bottom:1px solid rgba(0,80,140,.15)" + (odd ? ";font-weight:600" : "");
-    row.textContent = `${odd ? "⚠ " : ""}Last.fm: ${from.artist} – ${from.title}  →  Apple Music: ${m.artist} – ${m.title}${m.album ? ` (${m.album})` : ""}${m.from.length > 1 ? `  [+${m.from.length - 1} more Last.fm entries]` : ""}`;
+  for (const m of [...matched].sort((a, b) => b.odd - a.odd)) {
+    const row = document.createElement("label"), tick = document.createElement("input"), text = document.createElement("span");
+    row.style.cssText = "display:flex;gap:6px;align-items:flex-start;padding:3px 0;border-bottom:1px solid rgba(0,80,140,.15)" + (m.odd ? ";font-weight:600" : "");
+    tick.type = "checkbox";
+    if (todo.has(m.id)) { tick.checked = selected.has(m.id); tick.onchange = () => { tick.checked ? selected.add(m.id) : selected.delete(m.id); lfmButtons(); }; }
+    else tick.disabled = true;
+    const state = done.has(m.id) ? "✓ added · " : aside.has(m.id) ? "set aside · " : todo.has(m.id) ? "" : "already a favourite · ";
+    text.textContent = `${state}${m.odd ? "⚠ " : ""}Last.fm: ${m.from[0].artist} – ${m.from[0].title}  →  Apple Music: ${m.artist} – ${m.title}${m.album ? ` (${m.album})` : ""}${m.from.length > 1 ? `  [+${m.from.length - 1} more Last.fm entries]` : ""}`;
+    row.append(tick, text);
     box.appendChild(row);
   }
-  $("lfmMatchesHead").textContent = `Matches to check (${rows.filter(r => r.odd).length} differ, ${rows.length} in all)`;
+  lfmButtons();
 }
 
 $("lfmPreview").onclick = async () => {
@@ -1168,40 +1173,47 @@ $("lfmPreview").onclick = async () => {
     const r = await glass.lastfmMatch({ user: $("lfmUser").value, min, country: music.storefrontId });
     lfmNote("Checking which are already favourites…");
     const fresh = await notFavourited(r.matched);
-    lfm = { fresh };
-    showMatches(r.matched); showByHand(r.byHand);
+    lfm = { matched: r.matched, fresh, selected: new Set(), done: new Set(), aside: new Set() };
+    showMatches(); showByHand(r.byHand);
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
     lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done or set aside before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add. List saved to ${r.file}`);
-    lfmButtons();
   } catch (e) { lfmError(e); }
 };
 
 async function addFavourites(songs) {
   let ok = false;
-  $("lfmTest").disabled = $("lfmExact").disabled = $("lfmAdd").disabled = true;
+  for (const id of ["lfmTest", "lfmExact", "lfmAdd", "lfmSelExact", "lfmSelNone", "lfmAside"]) $(id).disabled = true;
   try {
     for (const [n, s] of songs.entries()) {
       await amp("PUT", `/v1/me/ratings/songs/${s.id}`, { type: "rating", attributes: { value: 1 } });
       await glass.lastfmLogAdd(s.keys.map(k => [k, s.id]));   // remembered, so it's never searched again
       lfm.fresh = lfm.fresh.filter(x => x !== s);
+      lfm.selected.delete(s.id); lfm.done.add(s.id);
       lfmNote(`Favourited ${n + 1} of ${songs.length}…`);
     }
     lfmNote(`Favourited ${songs.length}: ${songs.slice(0, 3).map(s => `${s.artist} – ${s.title}`).join("; ")}${songs.length > 3 ? "…" : ""}. ${lfm.fresh.length} left.`);
     ok = true;
   } catch (e) { lfmError(e); }
-  lfmButtons();
+  showMatches();
   return ok;
 }
-// "Without differences" = the Apple song's title and artist use the same words as Last.fm's (no Live, Remix, Remastered…).
+
+const lfmSelected = () => lfm.fresh.filter(m => lfm.selected.has(m.id));
+// "Without differences" = the Apple song's title and artist use the same words as Last.fm's (no Live, Remix, another artist…).
 function lfmButtons() {
-  const fresh = lfm?.fresh || [];
+  const fresh = lfm?.fresh || [], picked = lfm?.selected.size || 0;
+  const exact = fresh.filter(m => !m.odd).length, aside = fresh.filter(m => m.odd && !lfm.selected.has(m.id)).length;
   $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;
-  const exact = fresh.filter(m => !m.odd).length;
-  $("lfmExact").disabled = !exact;
-  $("lfmExact").textContent = `Add the ${exact} without differences`;
+  $("lfmSelExact").disabled = !exact;
+  $("lfmSelNone").disabled = !picked;
+  $("lfmExact").disabled = !picked;
+  $("lfmExact").textContent = `Add selected (${picked})`;
+  $("lfmAside").disabled = !aside;
+  $("lfmAside").textContent = `Set aside the ${aside} with differences`;
+  $("lfmMatchesHead").textContent = lfm ? `Matches to check (${fresh.filter(m => m.odd).length} differ, ${lfm.matched.length} in all, ${picked} selected)` : "Matches to check";
 }
-// After the ones without differences are added, the ones with differences are set aside: never added automatically,
-// and listed (here and in a file) to favourite by hand.
+
+// Set aside = never added automatically and not searched again; listed (here and in a file) to favourite by hand.
 function showByHand(list) {
   $("lfmHandHead").textContent = `To add by hand (${list.length})`;
   const box = $("lfmHand");
@@ -1213,18 +1225,21 @@ function showByHand(list) {
     box.appendChild(row);
   }
 }
-$("lfmExact").onclick = async () => {
+$("lfmSelExact").onclick = () => { if (!lfm) return; lfm.fresh.filter(m => !m.odd).forEach(m => lfm.selected.add(m.id)); showMatches(); };
+$("lfmSelNone").onclick = () => { if (!lfm) return; lfm.selected.clear(); showMatches(); };
+$("lfmExact").onclick = () => lfm && addFavourites(lfmSelected());
+$("lfmAside").onclick = async () => {
   if (!lfm) return;
-  const odd = lfm.fresh.filter(m => m.odd);
-  if (!await addFavourites(lfm.fresh.filter(m => !m.odd)) || !odd.length) return;
+  const odd = lfm.fresh.filter(m => m.odd && !lfm.selected.has(m.id));
   try {
     const { list, file } = await glass.lastfmBlacklist({ items: odd, country: music.storefrontId });
-    lfm.fresh = lfm.fresh.filter(m => !m.odd);
-    showByHand(list); lfmButtons();
-    lfmNote(`${$("lfmStatus").textContent} ${odd.length} with differences set aside, not added: favourite them by hand from the list below or ${file}`);
+    odd.forEach(m => lfm.aside.add(m.id));
+    lfm.fresh = lfm.fresh.filter(m => !lfm.aside.has(m.id));
+    showMatches(); showByHand(list);
+    lfmNote(`${odd.length} with differences set aside, not added: favourite them by hand from "To add by hand" below or ${file}`);
   } catch (e) { lfmError(e); }
 };
-$("lfmTest").onclick = () => lfm && addFavourites(lfm.fresh.slice(0, 3));
+$("lfmTest").onclick = () => lfm && addFavourites((lfm.selected.size ? lfmSelected() : lfm.fresh).slice(0, 3));
 $("lfmAdd").onclick = () => lfm && addFavourites([...lfm.fresh]);
 
 $("wordSync").checked = prefs.wordSync;
