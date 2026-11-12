@@ -22,8 +22,8 @@ test("pick skips wrong songs and counts the same Apple song once", () => {
   const c = (id, name, artistName) => ({ id, name, artistName });
   const tracks = [{ artist: "Ann", title: "Hi There", plays: 20 }, { artist: "Ann", title: "Hi There (live)", plays: 12 }, { artist: "Bo", title: "Gone", plays: 11 }];
   const candidates = [[c("1", "Other Song", "Zed"), c("2", "Hi There", "Ann")], [c("2", "Hi There", "Ann")], []];
-  const r = pick(tracks, candidates);
-  assert.deepEqual(r.matched, [{ id: "2", artist: "Ann", title: "Hi There" }]);
+  const r = pick(tracks, candidates, "gb");
+  assert.deepEqual(r.matched, [{ id: "2", artist: "Ann", title: "Hi There", keys: ["gb|ann|hi there", "gb|ann|hi there (live)"] }]);
   assert.deepEqual(r.unmatched.map(t => t.title), ["Gone"]);
 });
 

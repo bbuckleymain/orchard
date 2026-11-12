@@ -165,20 +165,33 @@ ipcMain.handle("musixmatch-key", (_e, key) => {
 // Most-played Last.fm songs, found on Apple Music. The UI then favourites them with your Apple sign-in.
 ipcMain.handle("lastfm-status", () => !!loadSecret("lastfm"));
 ipcMain.handle("lastfm-key", (_e, key) => { saveSecret("lastfm", String(key || "").trim()); return !!loadSecret("lastfm"); });
+// What has been favourited from Last.fm so far (key -> Apple song id), so those songs are never searched or checked again.
+const favLog = path.join(app.getPath("userData"), "lastfm-favourited.json");
+const readFavLog = () => { try { return JSON.parse(fs.readFileSync(favLog, "utf8")); } catch { return {}; } };
+ipcMain.handle("lastfm-log-add", (_e, entries) => {
+  const log = readFavLog();
+  for (const [key, id] of entries) log[key] = id;
+  fs.writeFileSync(favLog, JSON.stringify(log));
+});
+ipcMain.handle("lastfm-log-clear", () => fs.writeFileSync(favLog, "{}"));
+
 ipcMain.handle("lastfm-match", async (_e, { user, min, country }) => {
   const key = loadSecret("lastfm");
   user = String(user || "").trim();
   if (!key || !user) throw new Error("Enter your Last.fm username and save your API key first.");
-  const tracks = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
+  country = String(country || "us").toLowerCase().slice(0, 2);
+  const all = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
+  const log = readFavLog();
+  const tracks = all.filter(t => !log[lastfm.keyOf(country, t)]);
   const cacheFile = path.join(app.getPath("userData"), "lastfm-itunes.json");
   let cache = {};
   try { cache = JSON.parse(fs.readFileSync(cacheFile, "utf8")); } catch {}
   const save = () => { try { fs.writeFileSync(cacheFile, JSON.stringify(cache)); } catch {} };
   const candidates = await lastfm.lookUp(tracks, {
-    country: String(country || "us").toLowerCase().slice(0, 2), cache, save,
+    country, cache, save,
     onProgress: (done, total) => win?.webContents.send("lastfm-progress", { done, total }),
   });
-  return { total: tracks.length, ...lastfm.pick(tracks, candidates) };
+  return { total: all.length, logged: all.length - tracks.length, ...lastfm.pick(tracks, candidates, country) };
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());

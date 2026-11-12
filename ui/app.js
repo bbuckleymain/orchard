@@ -1019,6 +1019,7 @@ $("lfmClear").onclick = async () => {
     b.disabled = true;
     try {
       for (const [n, f] of todo.entries()) { await amp("DELETE", `/v1/me/ratings/${f.path}/${f.id}`); if (n % 10 === 9) lfmNote(`Removed ${n + 1} of ${todo.length}…`); }
+      await glass.lastfmLogClear();   // they're no longer favourites, so the log starts again
       lfmNote(`Removed ${todo.length} favourites. Run Preview next.`);
     } catch (e) { lfmError(e); }
     b.disabled = false; b.textContent = "Remove my current favourites…";
@@ -1050,7 +1051,7 @@ $("lfmPreview").onclick = async () => {
     const fresh = await notFavourited(r.matched);
     lfm = { fresh };
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
-    lfmNote(`${r.total} songs with ${min}+ plays: ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add.`);
+    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found. ${fresh.length} to add.`);
     $("lfmTest").disabled = $("lfmAdd").disabled = !fresh.length;
   } catch (e) { lfmError(e); }
 };
@@ -1060,6 +1061,7 @@ async function addFavourites(songs) {
   try {
     for (const [n, s] of songs.entries()) {
       await amp("PUT", `/v1/me/ratings/songs/${s.id}`, { type: "rating", attributes: { value: 1 } });
+      await glass.lastfmLogAdd(s.keys.map(k => [k, s.id]));   // remembered, so it's never searched again
       lfm.fresh = lfm.fresh.filter(x => x !== s);
       lfmNote(`Favourited ${n + 1} of ${songs.length}…`);
     }

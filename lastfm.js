@@ -25,10 +25,12 @@ async function topTracks({ user, key, min, fetchFn = fetch }) {
 // Apple Music's own /search refuses this app's requests (429 "Request is forbidden"), so songs are looked up with the
 // public iTunes Search API, whose trackId is the Apple Music song id. Slow by design: one search every 3.2 s. `cache`
 // (artist|title -> candidates) is filled as it goes, so a run that is stopped or limited carries on where it left off.
+const keyOf = (country, t) => `${country}|${t.artist}|${t.title}`.toLowerCase();
+
 async function lookUp(tracks, { country, cache, save = () => {}, onProgress = () => {}, fetchFn = fetch, pause = sleep }) {
   const out = [];
   for (const [i, t] of tracks.entries()) {
-    const key = `${country}|${t.artist}|${t.title}`.toLowerCase();
+    const key = keyOf(country, t);
     if (!cache[key]) {
       const url = "https://itunes.apple.com/search?" + new URLSearchParams({ term: `${t.title} ${t.artist}`, entity: "song", limit: "5", country });
       let r;
@@ -51,14 +53,16 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
 
 // Picks the Apple song for each Last.fm track from lookUp's results. candidates[i] is the list of { id, name, artistName } for tracks[i].
 // Returns { matched: [{ id, artist, title }], unmatched: [track] }. Two Last.fm entries that land on the same Apple song count once.
-function pick(tracks, candidates) {
+// Each matched song carries `keys`, the Last.fm entries that led to it, for the favourited log.
+function pick(tracks, candidates, country) {
   const found = new Map(), unmatched = [];
   tracks.forEach((t, i) => {
     const song = (candidates[i] || []).find(c => matches(c.name, c.artistName, 0, t.title, t.artist, 0));
-    if (song) found.set(song.id, { id: song.id, artist: song.artistName, title: song.name });
-    else unmatched.push(t);
+    if (!song) unmatched.push(t);
+    else if (found.has(song.id)) found.get(song.id).keys.push(keyOf(country, t));
+    else found.set(song.id, { id: song.id, artist: song.artistName, title: song.name, keys: [keyOf(country, t)] });
   });
   return { matched: [...found.values()], unmatched };
 }
 
-module.exports = { topTracks, lookUp, pick };
+module.exports = { topTracks, lookUp, pick, keyOf };
