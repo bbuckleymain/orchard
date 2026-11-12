@@ -39,4 +39,6 @@ test("matches accepts the same song and rejects another", () => {
   assert.equal(matches("Love Story", "Taylor Swift", 235, "Love Story", "Taylor Swift", 236), true);
   assert.equal(matches("Love Me Do", "The Beatles", 140, "Love Story", "Taylor Swift", 236), false);
   assert.equal(matches("Love Story", "Taylor Swift", 400, "Love Story", "Taylor Swift", 236), false, "wrong length");
+  assert.equal(matches("K.", "Cigarettes After Sex", 0, "K.", "Cigarettes After Sex", 0), true, "one-letter title");
+  assert.equal(matches("Apocalypse", "Cigarettes After Sex", 0, "K.", "Cigarettes After Sex", 0), false);
 });

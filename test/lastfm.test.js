@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { topTracks, pick } = require("../lastfm.js");
+const { topTracks, lookUp, pick } = require("../lastfm.js");
 
 const reply = body => async () => ({ ok: true, status: 200, json: async () => body });
 const track = (name, artist, plays) => ({ name, artist: { name: artist }, playcount: String(plays) });
@@ -25,4 +25,18 @@ test("pick skips wrong songs and counts the same Apple song once", () => {
   const r = pick(tracks, candidates);
   assert.deepEqual(r.matched, [{ id: "2", artist: "Ann", title: "Hi There" }]);
   assert.deepEqual(r.unmatched.map(t => t.title), ["Gone"]);
+});
+
+test("lookUp searches iTunes once per song, reuses the cache and waits out a 429", async () => {
+  const hit = (id, name, artist) => ({ ok: true, status: 200, json: async () => ({ results: [{ trackId: id, trackName: name, artistName: artist }] }) });
+  const urls = [], waits = [];
+  let calls = 0;
+  const fetchFn = async url => { urls.push(url); return ++calls === 1 ? { ok: false, status: 429 } : hit(7, "Hi", "Ann"); };
+  const cache = {};
+  const tracks = [{ artist: "Ann", title: "Hi" }];
+  const first = await lookUp(tracks, { country: "gb", cache, fetchFn, pause: ms => waits.push(ms) });
+  assert.deepEqual(first, [[{ id: "7", name: "Hi", artistName: "Ann" }]]);
+  assert.deepEqual(waits, [60000, 3200], "a minute after the 429, then the normal gap");
+  await lookUp(tracks, { country: "gb", cache, fetchFn, pause: ms => waits.push(ms) });
+  assert.equal(urls.length, 2, "second run came from the cache");
 });

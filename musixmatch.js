@@ -38,7 +38,9 @@ const overlaps = (a, b) => [...a].some(w => b.has(w));
 // Does a result from any lyrics source look like the song that's playing? Lengths are in seconds.
 function matches(foundTitle, foundArtist, foundLength, title, artist, duration) {
   const wanted = wordsOf(title), found = wordsOf(foundTitle);
-  if (!wanted.size || !overlaps(wanted, found)) return false;
+  const squash = text => String(text || "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const sameShortTitle = !wanted.size && !!squash(title) && squash(title) === squash(foundTitle);   // "K."
+  if (!sameShortTitle && (!wanted.size || !overlaps(wanted, found))) return false;
   if ([...wanted].filter(w => !found.has(w)).length > wanted.size / 2) return false;
   const who = wordsOf(artist);
   if (who.size && !overlaps(who, wordsOf(foundArtist))) return false;
