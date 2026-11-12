@@ -1176,7 +1176,7 @@ $("lfmPreview").onclick = async () => {
     lfm = { matched: r.matched, fresh, selected: new Set(), done: new Set(), aside: new Set() };
     showMatches(); showByHand(r.byHand);
     $("lfmMissing").textContent = r.unmatched.map(t => `${t.artist} – ${t.title} (${t.plays})`).join("\n");
-    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done or set aside before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found (added to "To add by hand"). ${fresh.length} to add. Searches: ${r.stats.apple} on Apple Music, ${r.stats.itunes} on iTunes${r.stats.isrc ? `, ${r.stats.isrc} found by ISRC` : ""}. List saved to ${r.file}`);
+    lfmNote(`${r.total} songs with ${min}+ plays (${r.logged} done or set aside before, skipped): ${r.matched.length} found on Apple Music (${r.matched.length - fresh.length} already favourites), ${r.unmatched.length} not found (added to "To add by hand"). ${fresh.length} to add. Searches: ${r.stats.apple} on Apple Music, ${r.stats.itunes} on iTunes${r.stats.albums ? `, ${r.stats.albums} through the artist's albums` : ""}${r.stats.isrc ? `, ${r.stats.isrc} by ISRC` : ""}${r.stats.deezer ? `, ${r.stats.deezer} through Deezer` : ""}. List saved to ${r.file}`);
   } catch (e) { lfmError(e); }
 };
 

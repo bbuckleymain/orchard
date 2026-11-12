@@ -73,6 +73,27 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
     return [];
   }
 
+  // Deezer: a second catalogue whose search forgives spelling. A result that fits the Last.fm song gives its ISRC (the
+  // recording's own code), which Apple Music is then asked for. Free, no key.
+  async function deezerIsrc(t) {
+    try {
+      const q = `${tidy(t.title)} ${primaryArtist(t.artist)}`;
+      const r = await fetchFn("https://api.deezer.com/search?" + new URLSearchParams({ q, limit: "10" }), { signal: AbortSignal.timeout(20000) });
+      await pause(300);
+      if (!r.ok) return null;
+      for (const d of ((await r.json()).data || [])) {
+        const c = { name: d.title, artistName: d.artist?.name, album: d.album?.title };
+        if (!matches(tidy(c.name), c.artistName, 0, tidy(t.title), t.artist, 0) || badVersion(c, t)) continue;
+        if (d.isrc) return d.isrc;
+        const one = await fetchFn(`https://api.deezer.com/track/${d.id}`, { signal: AbortSignal.timeout(20000) });   // the search result may leave the ISRC out
+        await pause(300);
+        const isrc = one.ok ? (await one.json()).isrc : null;
+        if (isrc) return isrc;
+      }
+    } catch {}
+    return null;
+  }
+
   // Every song on Apple Music by an artist, from the artist's own albums. iTunes search finds the artist's id (and leaves
   // out songs that aren't sold one by one, which is why it misses real songs); Apple Music's album pages have them all.
   async function artistCatalogue(name) {
@@ -122,6 +143,11 @@ async function lookUp(tracks, { country, cache, save = () => {}, onProgress = ()
             const found = await appleIsrc(isrc);
             if (found?.length) { stats.isrc = (stats.isrc || 0) + 1; list = [...found.map(c => ({ ...c, byIsrc: true })), ...list]; break; }
           }
+        }
+        if (!list.some(c => isExact(c, t))) {   // still nothing: Deezer's spelling-tolerant search, then Apple Music by that ISRC
+          const isrc = await deezerIsrc(t);
+          const found = isrc && await appleIsrc(isrc);
+          if (found?.length) { stats.deezer = (stats.deezer || 0) + 1; list = [...found.map(c => ({ ...c, byIsrc: true })), ...list]; }
         }
         if (list.some(c => isExact(c, t))) cache[key] = list;   // a miss is not remembered: it may be found next time
         else out.push(list), stats.missed = (stats.missed || 0) + 1;

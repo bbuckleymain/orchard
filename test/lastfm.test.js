@@ -183,3 +183,20 @@ test("lookUp finds a song through the artist's albums when searching only finds 
   await lookUp(none, { country: "gb", cache: cache2, fetchFn, pause: () => {} });
   assert.ok(!Object.keys(cache2).some(k => k.startsWith("v5|")), "a miss is not remembered");
 });
+
+test("lookUp falls back to Deezer: its ISRC, then Apple Music by that ISRC", async () => {
+  const fetchFn = async url => {
+    if (url.includes("deezer.com/search")) return { ok: true, status: 200, json: async () => ({ data: [
+      { id: 1, title: "Tallah Song (Live)", artist: { name: "Tallah" }, album: { title: "Live" }, isrc: "LIVE1" },
+      { id: 2, title: "Placenta", artist: { name: "Tallah" }, album: { title: "Matriphagy" }, isrc: "RIGHT1" }] }) };
+    return { ok: true, status: 200, json: async () => ({ results: [] }) };   // every Apple/iTunes search finds nothing
+  };
+  const isrcs = [];
+  const appleIsrc = async isrc => { isrcs.push(isrc); return [{ id: "42", name: "Placenta", artistName: "Tallah" }]; };
+  const stats = {};
+  const tracks = [{ artist: "Tallah", title: "Placenta", plays: 61 }];
+  const [list] = await lookUp(tracks, { country: "gb", cache: {}, fetchFn, appleIsrc, stats, pause: () => {} });
+  assert.deepEqual(isrcs, ["RIGHT1"], "the live result is skipped");
+  assert.equal(pick(tracks, [list], "gb").matched[0].id, "42");
+  assert.equal(stats.deezer, 1);
+});
