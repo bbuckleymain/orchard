@@ -368,6 +368,16 @@ function onState() {
   $("art").classList.toggle("playing", playing);
 }
 
+// The fullscreen lyrics take their colours from the cover (three tints, as --lyr1..3 in "r g b" form).
+function paintFromCover(url) {
+  const set = cols => [0, 1, 2].forEach(i => document.documentElement.style.setProperty(`--lyr${i + 1}`, (cols[i] || cols[0]).join(" ")));
+  if (!url) { set(Palette.FALLBACK); return; }
+  const probe = new Image();
+  probe.crossOrigin = "anonymous";
+  probe.onload = () => set(Palette.fromImage(probe) || Palette.FALLBACK);
+  probe.src = url;
+}
+
 function onItem() {
   report();
   const it = music.nowPlayingItem;
@@ -381,6 +391,7 @@ function onItem() {
   const img = $("artImg");
   img.classList.remove("on");
   { const a = $("art"); a.classList.remove("swap"); void a.offsetWidth; a.classList.add("swap"); }   // the mini player's cover slides out and the next one in
+  paintFromCover(big);
   if (big) { img.onload = () => img.classList.add("on"); img.src = big; $("glow").src = big; $("glow").classList.add("on"); }
   $("badge").hidden = !music.isAuthorized || it.isPreview;
   document.querySelectorAll(".miniArt").forEach(m => m.src = art(it.attributes?.artwork || it.artwork, 120));

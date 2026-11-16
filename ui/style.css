@@ -465,3 +465,20 @@ body.mini .round.mid { width: calc(48 * var(--u)); height: calc(48 * var(--u)); 
   body.mini #art.swap, body.mini #title.scroll { animation: none; }
   body.mini .eyebrow::after { animation: none; }
 }
+
+/* fullscreen lyrics in the colours of the cover: light tints that glow, on a darkened backdrop (as FollowTheLyrics does it) */
+:root { --lyr1: 244 247 255; --lyr2: 214 228 255; --lyr3: 255 240 228; }
+body.fs .now { background: linear-gradient(rgba(5, 9, 22, .58), rgba(5, 9, 22, .74)); }
+body.fs #title { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }
+body.fs #artist { color: rgba(255, 255, 255, .72); }
+body.fs .ly { color: rgb(var(--lyr1) / .34); }
+body.fs .ly:hover { background: rgb(var(--lyr1) / .07); }
+body.fs .ly.past { color: rgb(var(--lyr1) / .46); }
+body.fs .ly.on { color: rgb(var(--lyr1)); text-shadow: none;
+  filter: drop-shadow(0 0 .22em rgb(var(--lyr1) / .7)) drop-shadow(0 0 .8em rgb(var(--lyr2) / .5)); }
+body.fs .ly.on .w { background-image: linear-gradient(90deg, rgb(var(--lyr1)) calc(var(--p, 0) * 1.08% - 8%), rgb(var(--lyr1) / .36) calc(var(--p, 0) * 1.08%)); }
+body.fs .ly .bgv { color: rgb(var(--lyr2) / .8); }
+body.fs #lyrics.plain .ly { color: rgb(var(--lyr1) / .85); filter: none; }
+body.fs #lyrics .empty { color: rgb(var(--lyr1) / .7); }
+body.fs .dots i { background: rgb(var(--lyr1)); box-shadow: 0 0 .7em rgb(var(--lyr1) / .85); }
+body.fs .lyrics-foot, body.fs .times, body.fs .volume { color: rgba(255, 255, 255, .7); }
