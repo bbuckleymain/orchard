@@ -400,7 +400,8 @@ body.fs #lyrics.plain { padding-top: 6vh; }
 body.fs .ly { font-size: clamp(26px, 3.3vw, 54px); margin-bottom: .5em; padding: .08em .2em; }
 body.fs #lyrics.plain .ly { font-size: clamp(20px, 2.2vw, 34px); }
 body.fs .ly .bgv { font-size: .6em; }
-body.fs .dots i { width: 1em; height: 1em; }
+body.fs .dots i { width: .6em; height: .6em; }
+body.fs .ly.rest.on { height: calc(.6em + 36px); margin-bottom: .5em; }   /* tall enough for the dots at this size, which the 40px of the small view cut off */
 body.fs .transport { max-width: min(660px, 62vw); }
 body.fs #glow.on { opacity: 1; }
 body.fs.nolyr .stage { grid-template-columns: 1fr; }
