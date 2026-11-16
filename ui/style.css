@@ -480,10 +480,16 @@ body:not(.fs) #lyrics .empty, body.fs #lyrics .empty { color: rgb(var(--lyr1) / 
 body:not(.fs) .ly, body.fs .ly { color: rgb(var(--lyr1) / .36); }
 body:not(.fs) .ly:hover, body.fs .ly:hover { background: rgb(var(--lyr1) / .08); }
 body:not(.fs) .ly.past, body.fs .ly.past { color: rgb(var(--lyr1) / .5); }
-body:not(.fs) .ly.on, body.fs .ly.on { color: rgb(var(--lyr1)); text-shadow: none;
-  filter: drop-shadow(0 .04em .32em rgb(0 0 0 / .34)) drop-shadow(0 .05em .09em rgb(0 0 0 / .6))
-          drop-shadow(0 0 .5em rgb(var(--glow) / .8)) drop-shadow(0 0 .14em rgb(var(--glow) / .6)); }
-body:not(.fs) .ly.on .w, body.fs .ly.on .w { background-image: linear-gradient(90deg, rgb(var(--lyr1)) calc(var(--p, 0) * 1.08% - 8%), rgb(var(--lyr1) / .36) calc(var(--p, 0) * 1.08%)); }
+/* The sung line. The glow is a copy of the line's text (data-t) behind it, transparent apart from its shadow: drawn once when the line starts and never again.
+   The bright fill is a copy of each word on top (data-t), cut off by clip-path and moved every frame on a layer of its own. A filter on the whole line
+   would be redrawn, blur and all, with every frame of the fill. */
+body:not(.fs) .ly.on, body.fs .ly.on { color: rgb(var(--lyr1)); text-shadow: none; filter: none; }
+body:not(.fs) .ly.on::before, body.fs .ly.on::before { content: attr(data-t); position: absolute; inset: 0; z-index: -1; box-sizing: border-box; padding: inherit; pointer-events: none;
+  color: transparent; text-shadow: 0 .04em .32em rgb(0 0 0 / .34), 0 .05em .09em rgb(0 0 0 / .6), 0 0 .5em rgb(var(--glow) / .9), 0 0 .5em rgb(var(--glow) / .55), 0 0 .14em rgb(var(--glow) / .8); }
+body:not(.fs) .ly.on .w, body.fs .ly.on .w { position: relative; color: rgb(var(--lyr1) / .42); background: none; -webkit-background-clip: border-box; background-clip: border-box; }
+body:not(.fs) .ly.on .w::after, body.fs .ly.on .w::after { content: attr(data-t); position: absolute; left: 0; top: 0; white-space: pre; pointer-events: none;
+  color: rgb(var(--lyr1)); text-shadow: none; will-change: clip-path;
+  clip-path: inset(-.4em calc(100% - var(--p, 0) * 1%) -.4em -.2em); }
 body:not(.fs) .ly .bgv, body.fs .ly .bgv { color: rgb(var(--lyr2) / .85); }
 body:not(.fs) #lyrics.plain .ly, body.fs #lyrics.plain .ly { color: rgb(var(--lyr1) / .9); filter: none; }
 body:not(.fs) .dots i, body.fs .dots i { background: rgb(var(--glow)); box-shadow: 0 0 .7em rgb(var(--glow) / .8); }

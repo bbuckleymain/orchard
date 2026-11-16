@@ -556,7 +556,8 @@ glass.onFullscreenLeft(() => setFullscreen(false));  // the window manager took 
 ["pointermove", "pointerdown", "keydown"].forEach(t => document.addEventListener(t, wake, { passive: true }));
 
 // ---- lyrics ----
-let lyr = null, lyrFor = null, lyrIdx = -2, raf = 0, userScrollUntil = 0;
+let lyr = null, lyrFor = null, lyrIdx = -2, raf = 0, userScrollUntil = 0, scrollTarget = null, lastScrollAt = 0;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)");
 
 function lyricsMessage(text) {
   lyr = null;
@@ -587,7 +588,7 @@ async function loadLyrics(force) {
 function wordSpans(parent, words) {
   words.forEach((w, i) => {
     const span = document.createElement("span");
-    span.className = "w"; span.textContent = w.text;
+    span.className = "w"; span.textContent = span.dataset.t = w.text;   // data-t: the lit copy that is drawn over the word as it is sung
     parent.appendChild(span);
     if (!w.join && i < words.length - 1) parent.appendChild(document.createTextNode(" "));
   });
@@ -602,6 +603,7 @@ function renderLyrics() {
     const el = document.createElement("div");
     el.className = "ly" + (line.agent === "v2" ? " v2" : "") + (line.rest ? " rest" : "");
     el.dataset.i = i;
+    if (!line.rest) el.dataset.t = line.text;       // the glow behind the sung line is drawn from this
     if (line.rest) el.innerHTML = '<div class="dots"><i></i><i></i><i></i></div>';
     else if (line.words.length) wordSpans(el, line.words);
     else el.textContent = line.text;
@@ -611,6 +613,7 @@ function renderLyrics() {
   const how = !lyr.synced ? "not synced" : lyr.worded && prefs.wordSync ? "word-synced" : "line-synced";
   $("lyricsSource").textContent = `${lyr.source} · ${how}`;
   lyrIdx = -2;
+  scrollTarget = null;
   box.scrollTop = 0;
 }
 
@@ -649,8 +652,16 @@ function tick() {
       if (i !== idx) els[i].querySelectorAll(".w").forEach(w => { w.style.removeProperty("--p"); w.classList.remove("sung"); });
     }
     const cur = els[Math.max(idx, 0)];
-    if (cur && Date.now() > userScrollUntil)
-      box.scrollTo({ top: cur.offsetTop - box.clientHeight * 0.36, behavior: "smooth" });
+    if (cur && Date.now() > userScrollUntil) scrollTarget = Math.max(0, cur.offsetTop - box.clientHeight * 0.36);
+  }
+  // Ease towards the wanted position a little every frame. The browser's own smooth scroll restarts from the beginning each time a line
+  // changes, which looks jerky when lines change quickly.
+  const nowMs = performance.now(), dt = Math.min((nowMs - lastScrollAt) / 1000, 0.05);
+  lastScrollAt = nowMs;
+  if (scrollTarget != null && Date.now() > userScrollUntil) {
+    const gap = scrollTarget - box.scrollTop;
+    if (Math.abs(gap) < 0.5 || reduceMotion.matches) { box.scrollTop = scrollTarget; scrollTarget = null; }
+    else box.scrollTop += gap * (1 - Math.exp(-dt * 8));
   }
 
   const line = lines[idx], el = els[idx];
