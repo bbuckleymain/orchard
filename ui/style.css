@@ -493,3 +493,7 @@ body.fs .now { background: linear-gradient(var(--card, rgba(8, 14, 30, .66)), va
 body.fs #title { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }
 body.fs #artist { color: rgba(255, 255, 255, .72); }
 body.fs .lyrics-foot, body.fs .times, body.fs .volume { color: rgba(255, 255, 255, .7); }
+
+/* fullscreen is mostly a dark scrim over the scenery, so don't pay for blurring it behind the glass or for animating bubbles nobody can see */
+body.fs .now { backdrop-filter: none; -webkit-backdrop-filter: none; }
+body.fs .bubbles { display: none; }
