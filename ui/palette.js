@@ -107,7 +107,7 @@ const Palette = (() => {
   }
 
   // The colours of the whole player, from the cover's tints: the sky and aqua parts follow the main hue, the "grass" the second (or one 40 degrees along).
-  // Lightness is fixed per part and chroma kept in a pleasant range, so every cover gives a readable UI. Names are the CSS variables.
+  // --card and --card2 are the dark glass behind the lyrics. Lightness is fixed per part and chroma kept in a pleasant range, so every cover gives a readable UI. Names are the CSS variables.
   const hex = ([r, g, b]) => "#" + [r, g, b].map(v => v.toString(16).padStart(2, "0")).join("");
   function themeVars(cols) {
     const lch = c => { const [, a, b] = toOklab(...c); return { h: (Math.atan2(b, a) * 180 / Math.PI + 360) % 360, c: Math.min(0.17, Math.max(0.07, Math.hypot(a, b))) }; };
@@ -118,6 +118,7 @@ const Palette = (() => {
       "--sky-top": at(one, 0.58, 1), "--sky-mid": at(one, 0.8, 0.8), "--sky-low": at(one, 0.93, 0.28),
       "--aqua-1": hex(aqua1), "--aqua-2": at(one, 0.64, 1), "--aqua-3": at(one, 0.47, 0.9),
       "--text": hex(text), "--muted": `rgba(${text.join(", ")}, .62)`, "--sel": `rgba(${aqua1.join(", ")}, .45)`,
+      "--card": `rgba(${lchToRgb(0.22, one.c * 0.55, one.h).join(", ")}, .66)`, "--card2": `rgba(${lchToRgb(0.17, one.c * 0.5, one.h).join(", ")}, .8)`,
       "--grass": at(two, 0.72, 0.95), "--grass-deep": at(two, 0.52, 0.9), "--g1": at(two, 0.9, 0.7), "--g2": at(two, 0.8, 0.9), "--g4": at(two, 0.42, 0.8),
     };
   }

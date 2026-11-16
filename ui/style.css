@@ -475,7 +475,7 @@ body.fs { --gx: 64px; }
 #paneLyrics { margin-inline: calc(8px - var(--gx)); }
 #lyrics { padding-inline: var(--gx); }
 .lyrics-foot { padding-inline: var(--gx); }
-body:not(.fs) #lyrics { background: linear-gradient(rgba(8, 14, 30, .66), rgba(8, 14, 30, .78)); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12); }
+body:not(.fs) #lyrics { background: linear-gradient(var(--card, rgba(8, 14, 30, .66)), var(--card2, rgba(8, 14, 30, .78))); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12); }
 body:not(.fs) #lyrics .empty, body.fs #lyrics .empty { color: rgb(var(--lyr1) / .7); }
 body:not(.fs) .ly, body.fs .ly { color: rgb(var(--lyr1) / .36); }
 body:not(.fs) .ly:hover, body.fs .ly:hover { background: rgb(var(--lyr1) / .08); }
@@ -489,7 +489,7 @@ body:not(.fs) #lyrics.plain .ly, body.fs #lyrics.plain .ly { color: rgb(var(--ly
 body:not(.fs) .dots i, body.fs .dots i { background: rgb(var(--glow)); box-shadow: 0 0 .7em rgb(var(--glow) / .8); }
 body:not(.fs) .lyrics-foot { color: var(--muted); }
 /* fullscreen: a darkened backdrop and white song text to go with them */
-body.fs .now { background: linear-gradient(rgba(5, 9, 22, .58), rgba(5, 9, 22, .74)); }
+body.fs .now { background: linear-gradient(var(--card, rgba(8, 14, 30, .66)), var(--card2, rgba(8, 14, 30, .78))); }
 body.fs #title { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }
 body.fs #artist { color: rgba(255, 255, 255, .72); }
 body.fs .lyrics-foot, body.fs .times, body.fs .volume { color: rgba(255, 255, 255, .7); }

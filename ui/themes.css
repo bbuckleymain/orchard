@@ -193,6 +193,8 @@
 @property --sel { syntax: "<color>"; inherits: true; initial-value: rgba(120, 210, 255, .45); }
 @property --aqua-1 { syntax: "<color>"; inherits: true; initial-value: #8fe3ff; }
 @property --aqua-2 { syntax: "<color>"; inherits: true; initial-value: #1aa3e8; }
+@property --card { syntax: "<color>"; inherits: true; initial-value: rgba(8, 14, 30, .66); }
+@property --card2 { syntax: "<color>"; inherits: true; initial-value: rgba(8, 14, 30, .78); }
 @property --aqua-3 { syntax: "<color>"; inherits: true; initial-value: #0a6fb8; }
-[data-theme="album"] { transition: --sky-top 1.2s ease, --sky-mid 1.2s ease, --sky-low 1.2s ease, --grass 1.2s ease, --grass-deep 1.2s ease, --g1 1.2s ease, --g2 1.2s ease, --g4 1.2s ease, --text 1.2s ease, --muted 1.2s ease, --sel 1.2s ease, --aqua-1 1.2s ease, --aqua-2 1.2s ease, --aqua-3 1.2s ease; }
+[data-theme="album"] { transition: --sky-top 1.2s ease, --sky-mid 1.2s ease, --sky-low 1.2s ease, --grass 1.2s ease, --grass-deep 1.2s ease, --g1 1.2s ease, --g2 1.2s ease, --g4 1.2s ease, --text 1.2s ease, --muted 1.2s ease, --sel 1.2s ease, --aqua-1 1.2s ease, --aqua-2 1.2s ease, --aqua-3 1.2s ease, --card 1.2s ease, --card2 1.2s ease; }
 .theme[data-theme-pick="album"] .swatch { background: linear-gradient(135deg, #e0527a, #e8a23c 28%, #5fc23b 52%, #2aa3e0 76%, #8a5ce0); --chip: rgba(255, 255, 255, .75); }
