@@ -456,9 +456,6 @@ body.mini .times { margin: 0 0 calc(8 * var(--u)); }
 body.mini .controls { gap: calc(18 * var(--u)); }
 body.mini .round.big { width: calc(64 * var(--u)); height: calc(64 * var(--u)); }
 body.mini .round.mid { width: calc(48 * var(--u)); height: calc(48 * var(--u)); }
-body.mini #seek::-webkit-slider-thumb { width: calc(24 * var(--u)); height: calc(24 * var(--u)); margin-top: calc(-9 * var(--u)); border: 0; border-radius: 0; box-shadow: none;
-  background: radial-gradient(circle at 50% 38%, #fff 0 18%, #ffe98f 52%, #f2b300 100%);
-  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
 @keyframes blink { 50% { opacity: 0; } }
 @keyframes marquee { 0%, 14% { text-indent: 0; } 86%, 100% { text-indent: var(--shift); } }
 @keyframes coverSwap { 0% { opacity: 1; transform: none; } 38% { opacity: 0; transform: translateX(-8%) scale(.94); } 39% { transform: translateX(8%) scale(.94); } 100% { opacity: 1; transform: none; } }
