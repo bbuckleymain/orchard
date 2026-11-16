@@ -418,24 +418,7 @@ body.fs.idle #fsBtn { opacity: 0; pointer-events: none; }
   body.fs.idle .transport, body.fs.idle .lyrics-foot { transform: none; }
 }
 
-/* ---- mini player: Aero glass, the art in a glossy frame and the three buttons ---- */
-.eyebrow { display: none; }
-#miniBtn .to-full, body.mini #miniBtn .to-mini { display: none; }
-body.mini #miniBtn .to-full { display: block; }
-body.mini .list-pane, body.mini .now-tabs, body.mini .pills, body.mini #settingsBtn, body.mini .caption [data-win="max"], body.mini #fsBtn,
-body.mini .volume, body.mini #shuffle, body.mini #repeat, body.mini #fav, body.mini .mini { display: none; }
-body.mini main { grid-template-columns: 1fr; gap: 0; padding: 0 12px 12px; }
-body.mini .now { padding: 12px 20px 18px; animation: fsIn .28s var(--ease); }
-body.mini #art { width: 270px; height: 270px; margin-bottom: 14px; transform: scale(1); -webkit-box-reflect: unset;
-  box-shadow: 0 14px 36px rgba(0, 60, 120, .35), 0 0 46px rgba(130, 220, 255, .55); }
-body.mini .eyebrow { display: block; align-self: center; margin-bottom: 2px; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--aqua-3); text-shadow: 0 1px 0 rgba(255, 255, 255, .8); }
-body.mini #title { font-size: 21px; }
-body.mini #artist { font-size: 14px; margin-top: 2px; }
-body.mini .transport { max-width: none; }
-body.mini .times { margin-bottom: 10px; }
-body.mini .controls { gap: 18px; }
-body.mini .round.big { width: 64px; height: 64px; }
-@media (prefers-reduced-motion: reduce) { body.mini .now { animation: none; } }
+
 
 /* fullscreen queue: the right-hand column shows it in place of the lyrics */
 #fsQueueBtn { display: none; position: absolute; top: 14px; right: 62px; z-index: 3; }
@@ -446,3 +429,41 @@ body.fs.showq #paneQueue, body.fs.showq #paneQueue[hidden] { display: flex; }
 body.fs.nolyr.showq .stage { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
 body.fs #queue { padding: 8vh 0 12vh; font-size: clamp(15px, 1.4vw, 21px);
   -webkit-mask-image: linear-gradient(transparent 0, #000 9%, #000 88%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 9%, #000 88%, transparent 100%); }
+
+/* ---- mini player, after the pixel-art Cupid Player: the cover in a glossy frame, "now playing_", a star on the seek bar.
+   Everything scales from --u so the window can be resized; the details are drawn here in CSS, in Aero glass. ---- */
+.eyebrow { display: none; }
+#miniBtn .to-full, body.mini #miniBtn .to-mini { display: none; }
+body.mini #miniBtn .to-full { display: block; }
+body.mini { --u: min(calc(100vw / 360), calc(100vh / 570)); }
+body.mini #root { width: 100vw; }
+body.mini .list-pane, body.mini .now-tabs, body.mini .pills, body.mini #settingsBtn, body.mini .caption [data-win="max"], body.mini #fsBtn, body.mini #fsQueueBtn,
+body.mini .volume, body.mini #shuffle, body.mini #repeat, body.mini #fav, body.mini .mini { display: none; }
+body.mini main { grid-template-columns: 1fr; gap: 0; padding: 0 calc(12 * var(--u)) calc(12 * var(--u)); }
+body.mini .now { padding: calc(12 * var(--u)) calc(18 * var(--u)) calc(16 * var(--u)); animation: fsIn .28s var(--ease); }
+body.mini #paneNow { justify-content: center; }
+body.mini #art { width: calc(272 * var(--u)); height: calc(272 * var(--u)); margin-bottom: calc(14 * var(--u)); transform: scale(1); -webkit-box-reflect: unset;
+  border-radius: calc(22 * var(--u)); box-shadow: 0 14px 36px rgba(0, 60, 120, .35), 0 0 46px rgba(130, 220, 255, .55); }
+body.mini #art.swap { animation: coverSwap .5s var(--ease); }
+body.mini .eyebrow { display: block; font-size: calc(11 * var(--u)); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--aqua-3); text-shadow: 0 1px 0 rgba(255, 255, 255, .8); }
+body.mini .eyebrow::after { content: "_"; animation: blink 1.2s steps(2, jump-none) infinite; }
+body.mini #title { font-size: calc(21 * var(--u)); text-overflow: clip; }
+body.mini #title.scroll { animation: marquee var(--dur, 6s) ease-in-out infinite alternate; }
+body.mini #artist { font-size: calc(14 * var(--u)); margin: calc(2 * var(--u)) 0 calc(10 * var(--u)); }
+body.mini #artist::before { content: "by "; opacity: .7; }
+body.mini .transport { max-width: none; }
+body.mini .times { margin: 0 0 calc(8 * var(--u)); }
+body.mini .controls { gap: calc(18 * var(--u)); }
+body.mini .round.big { width: calc(64 * var(--u)); height: calc(64 * var(--u)); }
+body.mini .round.mid { width: calc(48 * var(--u)); height: calc(48 * var(--u)); }
+body.mini #seek::-webkit-slider-thumb { width: calc(24 * var(--u)); height: calc(24 * var(--u)); margin-top: calc(-9 * var(--u)); border: 0; border-radius: 0; box-shadow: none;
+  background: radial-gradient(circle at 50% 38%, #fff 0 18%, #ffe98f 52%, #f2b300 100%);
+  clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes marquee { 0%, 14% { text-indent: 0; } 86%, 100% { text-indent: var(--shift); } }
+@keyframes coverSwap { 0% { opacity: 1; transform: none; } 38% { opacity: 0; transform: translateX(-8%) scale(.94); } 39% { transform: translateX(8%) scale(.94); } 100% { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  body.mini .now { animation: none; }
+  body.mini #art.swap, body.mini #title.scroll { animation: none; }
+  body.mini .eyebrow::after { animation: none; }
+}

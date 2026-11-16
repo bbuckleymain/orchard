@@ -375,10 +375,12 @@ function onItem() {
   for (const el of [$("title"), $("artist")]) { el.classList.remove("fade"); void el.offsetWidth; el.classList.add("fade"); }
   $("title").textContent = it.title || it.attributes?.name || "";
   $("artist").textContent = it.artistName || it.attributes?.artistName || "";
+  marquee();
   document.title = $("artist").textContent ? `${$("title").textContent} — ${$("artist").textContent}` : $("title").textContent || "Orchard";
   const big = art(it.attributes?.artwork || it.artwork, 600);
   const img = $("artImg");
   img.classList.remove("on");
+  { const a = $("art"); a.classList.remove("swap"); void a.offsetWidth; a.classList.add("swap"); }   // the mini player's cover slides out and the next one in
   if (big) { img.onload = () => img.classList.add("on"); img.src = big; $("glow").src = big; $("glow").classList.add("on"); }
   $("badge").hidden = !music.isAuthorized || it.isPreview;
   document.querySelectorAll(".miniArt").forEach(m => m.src = art(it.attributes?.artwork || it.artwork, 120));
@@ -491,7 +493,16 @@ function setFullscreen(on) {
   if (on) { fsFrom = pane; loadLyrics(); lyrIdx = -2; raf = requestAnimationFrame(tick); wake(); }
   else { clearTimeout(idleTimer); document.body.classList.remove("idle"); setFsQueue(false); setPane(fsFrom); }
 }
-// ---- mini player: a small window with the art, the song and the buttons ----
+// ---- mini player: a small window with the cover, the song and the buttons ----
+function marquee() {                                // a title wider than the window slides back and forth
+  const t = $("title");
+  t.classList.remove("scroll");
+  if (!mini) return;
+  requestAnimationFrame(() => {
+    const over = t.scrollWidth - t.clientWidth;
+    if (over > 4) { t.style.setProperty("--shift", `-${over + 8}px`); t.style.setProperty("--dur", `${Math.max(over / 24, 3)}s`); t.classList.add("scroll"); }
+  });
+}
 let miniFrom = "now";
 function setMini(on) {
   if (on === mini) return;
@@ -500,6 +511,7 @@ function setMini(on) {
   mini = on;
   document.body.classList.toggle("mini", on);
   glass.mini(on);
+  marquee();
   if (!on) setPane(miniFrom);
 }
 $("miniBtn").onclick = () => setMini(!mini);
