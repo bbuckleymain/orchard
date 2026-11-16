@@ -39,3 +39,16 @@ test("the glow colour is the tint at full brightness and more saturated", () => 
   assert.ok(r === 255 && g < 123 && b < 117, `got ${[r, g, b]}`);
   assert.deepEqual(Palette.glow([200, 200, 205]), [236, 244, 255]);   // a grey tint glows near-white
 });
+
+test("themeVars gives the whole colour set, in the cover's hue, with light skies and dark text", () => {
+  const cols = Palette.fromPixels(image([[[200, 20, 30], 340], [[240, 240, 240], 60]]));
+  const v = Palette.themeVars(cols);
+  for (const name of ["--sky-top", "--sky-mid", "--sky-low", "--aqua-1", "--aqua-2", "--aqua-3", "--text", "--muted", "--sel", "--grass", "--grass-deep", "--g1", "--g2", "--g4"])
+    assert.ok(v[name], name);
+  const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  const hue = hueOf(rgb(v["--aqua-2"]));
+  assert.ok(hue < 25 || hue > 335, `hue ${hue}`);
+  assert.ok(lum(rgb(v["--sky-low"])) > 200, "a light horizon");
+  assert.ok(lum(rgb(v["--text"])) < 90, "dark text");
+});

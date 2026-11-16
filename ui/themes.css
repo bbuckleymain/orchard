@@ -177,3 +177,22 @@
 [data-theme="catppuccin"] kbd { background: var(--surface0); border-color: var(--surface1); box-shadow: 0 1px 0 var(--crust); }
 [data-theme="catppuccin"] #seekTip { background: var(--surface0); color: var(--text); }
 [data-theme="catppuccin"] .search:focus-within { border-color: var(--mauve); box-shadow: 0 0 0 3px var(--sel); }
+
+/* Album colours: the player takes its colours from the cover of the song playing (set from palette.js on <html>). Registering the variables as colours lets them
+   fade from one song's colours to the next instead of jumping. */
+@property --sky-top { syntax: "<color>"; inherits: true; initial-value: #1d8fe0; }
+@property --sky-mid { syntax: "<color>"; inherits: true; initial-value: #6cc8f5; }
+@property --sky-low { syntax: "<color>"; inherits: true; initial-value: #c9f0ff; }
+@property --grass { syntax: "<color>"; inherits: true; initial-value: #5fc23b; }
+@property --grass-deep { syntax: "<color>"; inherits: true; initial-value: #2e8f2a; }
+@property --g1 { syntax: "<color>"; inherits: true; initial-value: #c4ff8a; }
+@property --g2 { syntax: "<color>"; inherits: true; initial-value: #7fd84a; }
+@property --g4 { syntax: "<color>"; inherits: true; initial-value: #237a1c; }
+@property --text { syntax: "<color>"; inherits: true; initial-value: #06314f; }
+@property --muted { syntax: "<color>"; inherits: true; initial-value: rgba(6, 49, 79, .62); }
+@property --sel { syntax: "<color>"; inherits: true; initial-value: rgba(120, 210, 255, .45); }
+@property --aqua-1 { syntax: "<color>"; inherits: true; initial-value: #8fe3ff; }
+@property --aqua-2 { syntax: "<color>"; inherits: true; initial-value: #1aa3e8; }
+@property --aqua-3 { syntax: "<color>"; inherits: true; initial-value: #0a6fb8; }
+[data-theme="album"] { transition: --sky-top 1.2s ease, --sky-mid 1.2s ease, --sky-low 1.2s ease, --grass 1.2s ease, --grass-deep 1.2s ease, --g1 1.2s ease, --g2 1.2s ease, --g4 1.2s ease, --text 1.2s ease, --muted 1.2s ease, --sel 1.2s ease, --aqua-1 1.2s ease, --aqua-2 1.2s ease, --aqua-3 1.2s ease; }
+.theme[data-theme-pick="album"] .swatch { background: linear-gradient(135deg, #e0527a, #e8a23c 28%, #5fc23b 52%, #2aa3e0 76%, #8a5ce0); --chip: rgba(255, 255, 255, .75); }

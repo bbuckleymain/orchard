@@ -21,14 +21,23 @@ prefs.rememberVolume ??= true;
 prefs.wordSync ??= true;
 prefs.nudge ??= 0;
 
-// ---- theme: Aero (the original look), Night Aero or Catppuccin; see themes.css ----
-const THEMES = ["aero", "night", "catppuccin"];
+// ---- theme: Album colours (Aero in the colours of the cover), Aero (the original look), Night Aero or Catppuccin; see themes.css ----
+const THEMES = ["album", "aero", "night", "catppuccin"];
+let coverColours = null;                              // the cover's tints, once there is a song
+// Album colours sets the player's colour variables from the cover; any other theme takes them away again.
+function applyAlbumColours() {
+  const root = document.documentElement.style;
+  const v = document.documentElement.dataset.theme === "album" && coverColours ? Palette.themeVars(coverColours) : {};
+  for (const name of Object.keys(Palette.themeVars(Palette.FALLBACK))) v[name] ? root.setProperty(name, v[name]) : root.removeProperty(name);
+}
 function setTheme(name) {
-  if (!THEMES.includes(name)) name = "aero";
+  if (!THEMES.includes(name)) name = "album";
   document.documentElement.dataset.theme = name;
+  applyAlbumColours();
   document.querySelectorAll("[data-theme-pick]").forEach(b => b.classList.toggle("on", b.dataset.themePick === name));
   if (prefs.theme !== name) { prefs.theme = name; savePrefs(); }
 }
+if (!prefs.albumSeen) { prefs.albumSeen = true; if (!prefs.theme || prefs.theme === "aero") prefs.theme = "album"; savePrefs(); }   // the new theme is the default, once
 setTheme(prefs.theme);
 document.querySelectorAll("[data-theme-pick]").forEach(b => b.onclick = () => setTheme(b.dataset.themePick));
 
@@ -375,6 +384,8 @@ function paintFromCover(url) {
     const root = document.documentElement.style;
     [0, 1, 2].forEach(i => root.setProperty(`--lyr${i + 1}`, (cols[i] || cols[0]).join(" ")));
     root.setProperty("--glow", Palette.glow(cols[0]).join(" "));
+    coverColours = cols === Palette.FALLBACK ? null : cols;   // a grey cover leaves the player in its usual blue
+    applyAlbumColours();
   };
   if (!url) { set(Palette.FALLBACK); return; }
   const probe = new Image();
