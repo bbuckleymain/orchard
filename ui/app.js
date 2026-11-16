@@ -384,7 +384,7 @@ function onItem() {
   document.querySelectorAll(".miniArt").forEach(m => m.src = art(it.attributes?.artwork || it.artwork, 120));
   document.querySelectorAll(".miniTitle").forEach(m => m.textContent = $("title").textContent);
   document.querySelectorAll(".miniArtist").forEach(m => m.textContent = $("artist").textContent);
-  if (pane === "lyrics") loadLyrics();
+  if (pane === "lyrics" || fs) loadLyrics();
   refreshHeart();
   renderQueue();
   if ("mediaSession" in navigator) {
@@ -460,8 +460,9 @@ $("accAction").onclick = async () => {
 };
 
 // ---- right pane: Now Playing / Lyrics / Queue ----
-let pane = "now";
+let pane = "now", fs = false;
 function setPane(name) {
+  if (fs) return;                                   // fullscreen shows the art and the lyrics together
   pane = name;
   document.querySelectorAll("[data-pane]").forEach(b => b.classList.toggle("on", b.dataset.pane === name));
   $("paneNow").hidden = name !== "now";
@@ -473,11 +474,33 @@ function setPane(name) {
 }
 document.querySelectorAll("[data-pane]").forEach(b => b.onclick = () => setPane(b.dataset.pane));
 
+// ---- fullscreen: the window becomes the art, the lyrics and the controls ----
+let fsFrom = "now", idleTimer = 0;
+function wake() {                                    // controls and cursor come back on any movement, and go after a few quiet seconds of playing
+  document.body.classList.remove("idle");
+  clearTimeout(idleTimer);
+  if (fs) idleTimer = setTimeout(() => { if (music?.isPlaying) document.body.classList.add("idle"); }, 2800);
+}
+function setFullscreen(on) {
+  if (on === fs) return;
+  fs = on;
+  document.body.classList.toggle("fs", on);
+  glass.fullscreen(on);
+  cancelAnimationFrame(raf);
+  if (on) { fsFrom = pane; loadLyrics(); lyrIdx = -2; raf = requestAnimationFrame(tick); wake(); }
+  else { clearTimeout(idleTimer); document.body.classList.remove("idle"); setPane(fsFrom); }
+}
+$("fsBtn").onclick = () => setFullscreen(!fs);
+$("art").addEventListener("dblclick", () => setFullscreen(!fs));
+glass.onFullscreenLeft(() => setFullscreen(false));  // the window manager took it out of fullscreen
+["pointermove", "pointerdown", "keydown"].forEach(t => document.addEventListener(t, wake, { passive: true }));
+
 // ---- lyrics ----
 let lyr = null, lyrFor = null, lyrIdx = -2, raf = 0, userScrollUntil = 0;
 
 function lyricsMessage(text) {
   lyr = null;
+  document.body.classList.toggle("nolyr", text !== "Looking for lyrics…");   // fullscreen centres the art when there are no lyrics
   $("lyrics").className = "";
   $("lyrics").innerHTML = "";
   const d = document.createElement("div");
@@ -512,6 +535,7 @@ function wordSpans(parent, words) {
 
 function renderLyrics() {
   const box = $("lyrics");
+  document.body.classList.remove("nolyr");
   box.innerHTML = "";
   box.className = lyr.synced ? "" : "plain";
   lyr.lines.forEach((line, i) => {
@@ -1312,7 +1336,7 @@ $("lfmTest").onclick = () => lfm && addFavourites((lfm.selected.size ? lfmSelect
 $("lfmAdd").onclick = () => lfm && addFavourites([...lfm.fresh]);
 
 $("wordSync").checked = prefs.wordSync;
-$("wordSync").onchange = e => { prefs.wordSync = e.target.checked; savePrefs(); if (pane === "lyrics") loadLyrics(true); };
+$("wordSync").onchange = e => { prefs.wordSync = e.target.checked; savePrefs(); if (pane === "lyrics" || fs) loadLyrics(true); };
 
 document.addEventListener("keydown", e => {
   const el = document.activeElement;
@@ -1321,14 +1345,16 @@ document.addEventListener("keydown", e => {
   const slider = el?.type === "range";   // sliders take the arrow keys themselves
   if (e.key === "Escape") {
     $("menu").hidden = true;
-    if (typing) el.blur(); else if (!overlay.hidden) toggleSettings(false); else back();
+    if (typing) el.blur(); else if (!overlay.hidden) toggleSettings(false); else if (fs) setFullscreen(false); else back();
     return;
   }
+  if (e.key === "F11") { e.preventDefault(); setFullscreen(!fs); return; }
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") { e.preventDefault(); toggleSettings(false); $("q").focus(); $("q").select(); return; }
   if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   switch (key) {
     case "/": e.preventDefault(); toggleSettings(false); $("q").focus(); $("q").select(); break;
+    case "f": setFullscreen(!fs); break;
     case "l": case "y": setPane(pane === "lyrics" ? "now" : "lyrics"); break;
     case "q": setPane(pane === "queue" ? "now" : "queue"); break;
     case "m": toggleMute(); break;

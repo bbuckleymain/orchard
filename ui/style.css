@@ -380,3 +380,40 @@ kbd { display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 6px
   #lyrics, #list { scroll-behavior: auto; }
   .round:active, .pill:active, .chip:active, .action:active, #crumb:active { transform: none; }
 }
+
+/* ---- fullscreen: art and lyrics side by side, controls that step aside while you listen ---- */
+#fsBtn { position: absolute; top: 14px; right: 16px; z-index: 3; }
+#fsBtn .shrink, body.fs #fsBtn .expand { display: none; }
+body.fs #fsBtn .shrink { display: block; }
+body.fs header, body.fs .list-pane, body.fs .now-tabs, body.fs .mini, body.fs #paneQueue { display: none; }
+body.fs #root { grid-template-rows: 1fr; }
+body.fs main { grid-template-columns: 1fr; gap: 0; padding: 0; }
+body.fs .now { border-radius: 0; border: 0; padding: 5vh 5vw 3.5vh; animation: fsIn .28s var(--ease); }
+body.fs .now::before { display: none; }
+body.fs .stage { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5vw; }
+body.fs #paneNow[hidden], body.fs #paneLyrics[hidden] { display: flex; }
+body.fs #art { width: min(46vh, 34vw); height: min(46vh, 34vw); transform: scale(1); margin-bottom: 3vh; -webkit-box-reflect: none; }
+body.fs #title { font-size: clamp(26px, 3.2vw, 48px); animation: fsRise .3s var(--ease) 40ms backwards; }
+body.fs #artist { font-size: clamp(16px, 1.8vw, 24px); margin-top: .3em; animation: fsRise .3s var(--ease) 90ms backwards; }
+body.fs #lyrics { padding: 22vh 0 34vh; }
+body.fs #lyrics.plain { padding-top: 6vh; }
+body.fs .ly { font-size: clamp(26px, 3.3vw, 54px); margin-bottom: .5em; padding: .08em .2em; }
+body.fs #lyrics.plain .ly { font-size: clamp(20px, 2.2vw, 34px); }
+body.fs .ly .bgv { font-size: .6em; }
+body.fs .dots i { width: 1em; height: 1em; }
+body.fs .transport { max-width: min(660px, 62vw); }
+body.fs #glow.on { opacity: 1; }
+body.fs.nolyr .stage { grid-template-columns: 1fr; }
+body.fs.nolyr #paneLyrics { display: none; }
+body.fs .transport, body.fs .lyrics-foot, body.fs #fsBtn { transition: opacity .3s var(--ease), transform .3s var(--ease); }
+body.fs #fsBtn { transition: opacity .3s var(--ease), transform .16s var(--ease), filter .2s; }
+body.fs.idle { cursor: none; }
+body.fs.idle * { cursor: none; }
+body.fs.idle .transport, body.fs.idle .lyrics-foot { opacity: 0; transform: translateY(10px); pointer-events: none; }
+body.fs.idle #fsBtn { opacity: 0; pointer-events: none; }
+@keyframes fsIn { from { opacity: 0; transform: scale(.985); } }
+@keyframes fsRise { from { opacity: 0; transform: translateY(10px); } }
+@media (prefers-reduced-motion: reduce) {
+  body.fs .now, body.fs #title, body.fs #artist { animation: none; }
+  body.fs.idle .transport, body.fs.idle .lyrics-foot { transform: none; }
+}

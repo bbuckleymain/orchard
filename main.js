@@ -88,6 +88,7 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   win.webContents.on("will-navigate", (e, url) => { if (!url.startsWith(`http://127.0.0.1:${port}/`)) e.preventDefault(); });
   win.once("ready-to-show", () => win.show());
+  win.on("leave-full-screen", () => win.webContents.send("fullscreen-left"));
   win.loadURL(`http://127.0.0.1:${port}/index.html`);
 }
 
@@ -255,6 +256,8 @@ ipcMain.on("window", (_e, action) => {
   if (action === "close") win.close();
   else if (action === "min") win.minimize();
   else if (action === "max") win.isMaximized() ? win.unmaximize() : win.maximize();
+  else if (action === "fullscreen") win.setFullScreen(true);
+  else if (action === "windowed") win.setFullScreen(false);
 });
 
 // On Windows this groups the taskbar icon and names Orchard in the media controls.
