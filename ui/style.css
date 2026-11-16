@@ -466,25 +466,27 @@ body.mini .round.mid { width: calc(48 * var(--u)); height: calc(48 * var(--u)); 
   body.mini .eyebrow::after { animation: none; }
 }
 
-/* lyrics in the colours of the cover, in every window: light tints that glow on dark backdrops (fullscreen, the dark themes), deeper ones on the light glass.
-   The glow needs room, or the edge of the list cuts it off: the list is padded by --gx and its pane pulled out by the same amount. */
-:root { --lyr1: 244 247 255; --lyr2: 214 228 255; --lyr3: 255 240 228; --lyrd1: 6 49 79; --lyrd2: 26 90 140; --lyrd3: 70 60 130;
-  --lt1: var(--lyrd1); --lt2: var(--lyrd2); --lt3: var(--lyrd3); --gx: 26px; }
-[data-theme="night"], [data-theme="catppuccin"], body.fs { --lt1: var(--lyr1); --lt2: var(--lyr2); --lt3: var(--lyr3); }
+/* Lyrics in the colours of the cover, in every window, drawn the way FollowTheLyrics draws them: a light tint of the cover, a soft dark shadow under it for
+   contrast, and a wide halo (half the text size) of the cover's colour at full brightness. A glow needs a dark backdrop, so the list sits on a dark glass card
+   (fullscreen is dark already). The list is padded by --gx, and its pane pulled out by as much, so the edge of the list doesn't cut the halo off. */
+:root { --lyr1: 244 247 255; --lyr2: 214 228 255; --lyr3: 255 240 228; --glow: 236 244 255; --gx: 30px; }
 body.fs { --gx: 64px; }
 #paneLyrics { margin-inline: calc(8px - var(--gx)); }
 #lyrics { padding-inline: var(--gx); }
 .lyrics-foot { padding-inline: var(--gx); }
-body:not(.fs) .ly, body.fs .ly { color: rgb(var(--lt1) / .36); }
-body:not(.fs) .ly:hover, body.fs .ly:hover { background: rgb(var(--lt1) / .08); }
-body:not(.fs) .ly.past, body.fs .ly.past { color: rgb(var(--lt1) / .5); }
-body:not(.fs) .ly.on, body.fs .ly.on { color: rgb(var(--lt1)); text-shadow: none;
-  filter: drop-shadow(0 0 .2em rgb(var(--lt1) / .5)) drop-shadow(0 0 .75em rgb(var(--lt2) / .45)) drop-shadow(0 0 1.5em rgb(var(--lt3) / .35)); }
-body:not(.fs) .ly.on .w, body.fs .ly.on .w { background-image: linear-gradient(90deg, rgb(var(--lt1)) calc(var(--p, 0) * 1.08% - 8%), rgb(var(--lt1) / .36) calc(var(--p, 0) * 1.08%)); }
-body:not(.fs) .ly .bgv, body.fs .ly .bgv { color: rgb(var(--lt2) / .85); }
-body:not(.fs) #lyrics.plain .ly, body.fs #lyrics.plain .ly { color: rgb(var(--lt1) / .9); filter: none; }
-body:not(.fs) #lyrics .empty, body.fs #lyrics .empty { color: rgb(var(--lt1) / .7); }
-body:not(.fs) .dots i, body.fs .dots i { background: rgb(var(--lt1)); box-shadow: 0 0 .7em rgb(var(--lt1) / .6); }
+body:not(.fs) #lyrics { background: linear-gradient(rgba(8, 14, 30, .66), rgba(8, 14, 30, .78)); border-radius: 22px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .12); }
+body:not(.fs) #lyrics .empty, body.fs #lyrics .empty { color: rgb(var(--lyr1) / .7); }
+body:not(.fs) .ly, body.fs .ly { color: rgb(var(--lyr1) / .36); }
+body:not(.fs) .ly:hover, body.fs .ly:hover { background: rgb(var(--lyr1) / .08); }
+body:not(.fs) .ly.past, body.fs .ly.past { color: rgb(var(--lyr1) / .5); }
+body:not(.fs) .ly.on, body.fs .ly.on { color: rgb(var(--lyr1)); text-shadow: none;
+  filter: drop-shadow(0 .04em .32em rgb(0 0 0 / .34)) drop-shadow(0 .05em .09em rgb(0 0 0 / .6))
+          drop-shadow(0 0 .5em rgb(var(--glow) / .8)) drop-shadow(0 0 .14em rgb(var(--glow) / .6)); }
+body:not(.fs) .ly.on .w, body.fs .ly.on .w { background-image: linear-gradient(90deg, rgb(var(--lyr1)) calc(var(--p, 0) * 1.08% - 8%), rgb(var(--lyr1) / .36) calc(var(--p, 0) * 1.08%)); }
+body:not(.fs) .ly .bgv, body.fs .ly .bgv { color: rgb(var(--lyr2) / .85); }
+body:not(.fs) #lyrics.plain .ly, body.fs #lyrics.plain .ly { color: rgb(var(--lyr1) / .9); filter: none; }
+body:not(.fs) .dots i, body.fs .dots i { background: rgb(var(--glow)); box-shadow: 0 0 .7em rgb(var(--glow) / .8); }
+body:not(.fs) .lyrics-foot { color: var(--muted); }
 /* fullscreen: a darkened backdrop and white song text to go with them */
 body.fs .now { background: linear-gradient(rgba(5, 9, 22, .58), rgba(5, 9, 22, .74)); }
 body.fs #title { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }

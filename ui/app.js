@@ -370,12 +370,16 @@ function onState() {
 
 // The fullscreen lyrics take their colours from the cover (three tints, as --lyr1..3 in "r g b" form).
 function paintFromCover(url) {
-  // --lyr1..3 are light tints (dark themes, fullscreen), --lyrd1..3 deep ones (light themes), as "r g b"
-  const set = (name, cols) => [0, 1, 2].forEach(i => document.documentElement.style.setProperty(`--${name}${i + 1}`, (cols[i] || cols[0]).join(" ")));
-  if (!url) { set("lyr", Palette.FALLBACK); set("lyrd", Palette.DEEP_FALLBACK); return; }
+  // --lyr1..3 are the light tints and --glow the vivid colour of the halo, as "r g b"
+  const set = cols => {
+    const root = document.documentElement.style;
+    [0, 1, 2].forEach(i => root.setProperty(`--lyr${i + 1}`, (cols[i] || cols[0]).join(" ")));
+    root.setProperty("--glow", Palette.glow(cols[0]).join(" "));
+  };
+  if (!url) { set(Palette.FALLBACK); return; }
   const probe = new Image();
   probe.crossOrigin = "anonymous";
-  probe.onload = () => { set("lyr", Palette.fromImage(probe) || Palette.FALLBACK); set("lyrd", Palette.fromImage(probe, true) || Palette.DEEP_FALLBACK); };
+  probe.onload = () => set(Palette.fromImage(probe) || Palette.FALLBACK);
   probe.src = url;
 }
 

@@ -4,8 +4,7 @@
 
 const Palette = (() => {
   const K = 6, CHROMA_MIN = 0.032, SHARE_MIN = 0.012, HUE_GAP = 28, TEXT_L = [0.64, 0.88], TEXT_C = [0.11, 0.25];
-  const DEEP_L = [0.30, 0.48], DEEP_C = [0.09, 0.2];      // the same colours, darker, for text on a light backdrop
-  const FALLBACK = [[244, 247, 255], [214, 228, 255], [255, 240, 228]], DEEP_FALLBACK = [[6, 49, 79], [26, 90, 140], [70, 60, 130]];
+  const FALLBACK = [[244, 247, 255], [214, 228, 255], [255, 240, 228]];
 
   const toLinear = v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
   const fromLinear = v => { v = Math.min(1, Math.max(0, v)); return Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055)); };
@@ -61,8 +60,8 @@ const Palette = (() => {
   }
 
   // pixels: RGBA bytes (a canvas' getImageData().data). Returns up to three [r, g, b], the main colour first.
-  function fromPixels(data, deep = false) {
-    const [lo, hi] = deep ? DEEP_L : TEXT_L, [cLo, cHi] = deep ? DEEP_C : TEXT_C, fallback = deep ? DEEP_FALLBACK : FALLBACK;
+  function fromPixels(data) {
+    const [lo, hi] = TEXT_L, [cLo, cHi] = TEXT_C, fallback = FALLBACK;
     const labs = [];
     for (let i = 0; i + 3 < data.length; i += 4) if (data[i + 3] > 200) labs.push(toOklab(data[i], data[i + 1], data[i + 2]));
     if (!labs.length) return fallback;
@@ -87,17 +86,27 @@ const Palette = (() => {
   }
 
   // From a loaded <img> (its server must allow canvas reads); null when the browser won't give the pixels.
-  function fromImage(img, deep = false, size = 40) {
+  function fromImage(img, size = 40) {
     try {
       const c = document.createElement("canvas");
       c.width = c.height = size;
       const g = c.getContext("2d", { willReadFrequently: true });
       g.drawImage(img, 0, 0, size, size);
-      return fromPixels(g.getImageData(0, 0, size, size).data, deep);
+      return fromPixels(g.getImageData(0, 0, size, size).data);
     } catch { return null; }
   }
 
-  return { fromPixels, fromImage, FALLBACK, DEEP_FALLBACK };
+  // The glow colour: the main tint at full brightness and a little more saturated, so it glows rather than tints (FollowTheLyrics' glow_color).
+  function glow([r, g, b]) {
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, s = mx ? d / mx : 0;
+    if (s < 0.1) return [236, 244, 255];
+    const h = (mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4) * 60;
+    const S = Math.min(1, s * 1.25 + 0.1), x = S * (1 - Math.abs(((h + 360) % 360) / 60 % 2 - 1)), m = 1 - S;
+    const [r1, g1, b1] = [[S, x, 0], [x, S, 0], [0, S, x], [0, x, S], [x, 0, S], [S, 0, x]][Math.floor(((h + 360) % 360) / 60) % 6];
+    return [r1, g1, b1].map(v => Math.round((v + m) * 255));
+  }
+
+  return { fromPixels, fromImage, glow, FALLBACK };
 })();
 
 if (typeof module !== "undefined") module.exports = Palette;
