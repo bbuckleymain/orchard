@@ -370,11 +370,12 @@ function onState() {
 
 // The fullscreen lyrics take their colours from the cover (three tints, as --lyr1..3 in "r g b" form).
 function paintFromCover(url) {
-  const set = cols => [0, 1, 2].forEach(i => document.documentElement.style.setProperty(`--lyr${i + 1}`, (cols[i] || cols[0]).join(" ")));
-  if (!url) { set(Palette.FALLBACK); return; }
+  // --lyr1..3 are light tints (dark themes, fullscreen), --lyrd1..3 deep ones (light themes), as "r g b"
+  const set = (name, cols) => [0, 1, 2].forEach(i => document.documentElement.style.setProperty(`--${name}${i + 1}`, (cols[i] || cols[0]).join(" ")));
+  if (!url) { set("lyr", Palette.FALLBACK); set("lyrd", Palette.DEEP_FALLBACK); return; }
   const probe = new Image();
   probe.crossOrigin = "anonymous";
-  probe.onload = () => set(Palette.fromImage(probe) || Palette.FALLBACK);
+  probe.onload = () => { set("lyr", Palette.fromImage(probe) || Palette.FALLBACK); set("lyrd", Palette.fromImage(probe, true) || Palette.DEEP_FALLBACK); };
   probe.src = url;
 }
 

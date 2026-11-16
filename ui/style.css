@@ -395,7 +395,7 @@ body.fs #paneNow[hidden], body.fs #paneLyrics[hidden] { display: flex; }
 body.fs #art { width: min(46vh, 34vw); height: min(46vh, 34vw); transform: scale(1); margin-bottom: 3vh; -webkit-box-reflect: unset; }
 body.fs #title { font-size: clamp(26px, 3.2vw, 48px); animation: fsRise .3s var(--ease) 40ms backwards; }
 body.fs #artist { font-size: clamp(16px, 1.8vw, 24px); margin-top: .3em; animation: fsRise .3s var(--ease) 90ms backwards; }
-body.fs #lyrics { padding: 22vh 0 34vh; }
+body.fs #lyrics { padding: 22vh var(--gx) 34vh; }
 body.fs #lyrics.plain { padding-top: 6vh; }
 body.fs .ly { font-size: clamp(26px, 3.3vw, 54px); margin-bottom: .5em; padding: .08em .2em; }
 body.fs #lyrics.plain .ly { font-size: clamp(20px, 2.2vw, 34px); }
@@ -466,19 +466,27 @@ body.mini .round.mid { width: calc(48 * var(--u)); height: calc(48 * var(--u)); 
   body.mini .eyebrow::after { animation: none; }
 }
 
-/* fullscreen lyrics in the colours of the cover: light tints that glow, on a darkened backdrop (as FollowTheLyrics does it) */
-:root { --lyr1: 244 247 255; --lyr2: 214 228 255; --lyr3: 255 240 228; }
+/* lyrics in the colours of the cover, in every window: light tints that glow on dark backdrops (fullscreen, the dark themes), deeper ones on the light glass.
+   The glow needs room, or the edge of the list cuts it off: the list is padded by --gx and its pane pulled out by the same amount. */
+:root { --lyr1: 244 247 255; --lyr2: 214 228 255; --lyr3: 255 240 228; --lyrd1: 6 49 79; --lyrd2: 26 90 140; --lyrd3: 70 60 130;
+  --lt1: var(--lyrd1); --lt2: var(--lyrd2); --lt3: var(--lyrd3); --gx: 26px; }
+[data-theme="night"], [data-theme="catppuccin"], body.fs { --lt1: var(--lyr1); --lt2: var(--lyr2); --lt3: var(--lyr3); }
+body.fs { --gx: 64px; }
+#paneLyrics { margin-inline: calc(8px - var(--gx)); }
+#lyrics { padding-inline: var(--gx); }
+.lyrics-foot { padding-inline: var(--gx); }
+body:not(.fs) .ly, body.fs .ly { color: rgb(var(--lt1) / .36); }
+body:not(.fs) .ly:hover, body.fs .ly:hover { background: rgb(var(--lt1) / .08); }
+body:not(.fs) .ly.past, body.fs .ly.past { color: rgb(var(--lt1) / .5); }
+body:not(.fs) .ly.on, body.fs .ly.on { color: rgb(var(--lt1)); text-shadow: none;
+  filter: drop-shadow(0 0 .2em rgb(var(--lt1) / .5)) drop-shadow(0 0 .75em rgb(var(--lt2) / .45)) drop-shadow(0 0 1.5em rgb(var(--lt3) / .35)); }
+body:not(.fs) .ly.on .w, body.fs .ly.on .w { background-image: linear-gradient(90deg, rgb(var(--lt1)) calc(var(--p, 0) * 1.08% - 8%), rgb(var(--lt1) / .36) calc(var(--p, 0) * 1.08%)); }
+body:not(.fs) .ly .bgv, body.fs .ly .bgv { color: rgb(var(--lt2) / .85); }
+body:not(.fs) #lyrics.plain .ly, body.fs #lyrics.plain .ly { color: rgb(var(--lt1) / .9); filter: none; }
+body:not(.fs) #lyrics .empty, body.fs #lyrics .empty { color: rgb(var(--lt1) / .7); }
+body:not(.fs) .dots i, body.fs .dots i { background: rgb(var(--lt1)); box-shadow: 0 0 .7em rgb(var(--lt1) / .6); }
+/* fullscreen: a darkened backdrop and white song text to go with them */
 body.fs .now { background: linear-gradient(rgba(5, 9, 22, .58), rgba(5, 9, 22, .74)); }
 body.fs #title { color: #fff; text-shadow: 0 2px 18px rgba(0, 0, 0, .55); }
 body.fs #artist { color: rgba(255, 255, 255, .72); }
-body.fs .ly { color: rgb(var(--lyr1) / .34); }
-body.fs .ly:hover { background: rgb(var(--lyr1) / .07); }
-body.fs .ly.past { color: rgb(var(--lyr1) / .46); }
-body.fs .ly.on { color: rgb(var(--lyr1)); text-shadow: none;
-  filter: drop-shadow(0 0 .22em rgb(var(--lyr1) / .7)) drop-shadow(0 0 .8em rgb(var(--lyr2) / .5)); }
-body.fs .ly.on .w { background-image: linear-gradient(90deg, rgb(var(--lyr1)) calc(var(--p, 0) * 1.08% - 8%), rgb(var(--lyr1) / .36) calc(var(--p, 0) * 1.08%)); }
-body.fs .ly .bgv { color: rgb(var(--lyr2) / .8); }
-body.fs #lyrics.plain .ly { color: rgb(var(--lyr1) / .85); filter: none; }
-body.fs #lyrics .empty { color: rgb(var(--lyr1) / .7); }
-body.fs .dots i { background: rgb(var(--lyr1)); box-shadow: 0 0 .7em rgb(var(--lyr1) / .85); }
 body.fs .lyrics-foot, body.fs .times, body.fs .volume { color: rgba(255, 255, 255, .7); }

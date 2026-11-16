@@ -32,3 +32,12 @@ test("two colourful areas give two colours whose hues are apart", () => {
 test("no opaque pixels gives the fallback", () => {
   assert.deepEqual(Palette.fromPixels(Uint8ClampedArray.from([1, 2, 3, 0, 4, 5, 6, 0])), Palette.FALLBACK);
 });
+
+test("the deep tints are darker than the light ones, in the same hue", () => {
+  const px = image([[[200, 20, 30], 340], [[240, 240, 240], 60]]);
+  const [light] = Palette.fromPixels(px), [deep] = Palette.fromPixels(px, true);
+  assert.ok(Math.max(...deep) < Math.max(...light));
+  const d = Math.abs(hueOf(light) - hueOf(deep));
+  assert.ok(Math.min(d, 360 - d) < 20, `hues ${hueOf(light)} and ${hueOf(deep)}`);
+  assert.deepEqual(Palette.fromPixels(image([[[120, 120, 120], 400]]), true), Palette.DEEP_FALLBACK);
+});

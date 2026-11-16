@@ -4,7 +4,8 @@
 
 const Palette = (() => {
   const K = 6, CHROMA_MIN = 0.032, SHARE_MIN = 0.012, HUE_GAP = 28, TEXT_L = [0.64, 0.88], TEXT_C = [0.11, 0.25];
-  const FALLBACK = [[244, 247, 255], [214, 228, 255], [255, 240, 228]];
+  const DEEP_L = [0.30, 0.48], DEEP_C = [0.09, 0.2];      // the same colours, darker, for text on a light backdrop
+  const FALLBACK = [[244, 247, 255], [214, 228, 255], [255, 240, 228]], DEEP_FALLBACK = [[6, 49, 79], [26, 90, 140], [70, 60, 130]];
 
   const toLinear = v => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
   const fromLinear = v => { v = Math.min(1, Math.max(0, v)); return Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055)); };
@@ -60,10 +61,11 @@ const Palette = (() => {
   }
 
   // pixels: RGBA bytes (a canvas' getImageData().data). Returns up to three [r, g, b], the main colour first.
-  function fromPixels(data) {
+  function fromPixels(data, deep = false) {
+    const [lo, hi] = deep ? DEEP_L : TEXT_L, [cLo, cHi] = deep ? DEEP_C : TEXT_C, fallback = deep ? DEEP_FALLBACK : FALLBACK;
     const labs = [];
     for (let i = 0; i + 3 < data.length; i += 4) if (data[i + 3] > 200) labs.push(toOklab(data[i], data[i + 1], data[i + 2]));
-    if (!labs.length) return FALLBACK;
+    if (!labs.length) return fallback;
     const { centres, label } = cluster(labs.map(([L, a, b]) => [L * 0.6, a, b]), K);
     const fams = centres.map((_, j) => {
       const idx = []; labs.forEach((p, i) => { if (label[i] === j) idx.push(i); });
@@ -73,29 +75,29 @@ const Palette = (() => {
       const m = [0, 1, 2].map(c => top.reduce((s, i) => s + labs[i][c], 0) / top.length);
       return { share: idx.length / labs.length, L: m[0], C: Math.hypot(m[1], m[2]), h: (Math.atan2(m[2], m[1]) * 180 / Math.PI + 360) % 360 };
     }).filter(f => f && f.C >= CHROMA_MIN && f.share >= SHARE_MIN);
-    if (!fams.length) return FALLBACK;
+    if (!fams.length) return fallback;
     const score = f => f.share ** 0.55 * f.C ** 1.15 * (f.L < 0.28 ? 0.45 : 1) * (f.h >= 35 && f.h <= 80 && f.C < 0.11 ? 0.55 : 1);   // dark and muddy yellow-browns count for less
     fams.sort((a, b) => score(b) - score(a));
     const chosen = [fams[0]];
     for (const f of fams.slice(1)) if (chosen.length < 3 && chosen.every(c => hueGap(f.h, c.h) >= HUE_GAP)) chosen.push(f);
     return chosen.map(f => {
-      const pref = TEXT_L[0] + (TEXT_L[1] - TEXT_L[0]) * Math.min(1, Math.max(0, (f.L - 0.25) / 0.6));
-      return lchToRgb(pref, Math.min(TEXT_C[1], Math.max(TEXT_C[0], f.C * 1.35)), f.h);
+      const pref = lo + (hi - lo) * Math.min(1, Math.max(0, (f.L - 0.25) / 0.6));
+      return lchToRgb(pref, Math.min(cHi, Math.max(cLo, f.C * 1.35)), f.h);
     });
   }
 
   // From a loaded <img> (its server must allow canvas reads); null when the browser won't give the pixels.
-  function fromImage(img, size = 40) {
+  function fromImage(img, deep = false, size = 40) {
     try {
       const c = document.createElement("canvas");
       c.width = c.height = size;
       const g = c.getContext("2d", { willReadFrequently: true });
       g.drawImage(img, 0, 0, size, size);
-      return fromPixels(g.getImageData(0, 0, size, size).data);
+      return fromPixels(g.getImageData(0, 0, size, size).data, deep);
     } catch { return null; }
   }
 
-  return { fromPixels, fromImage, FALLBACK };
+  return { fromPixels, fromImage, FALLBACK, DEEP_FALLBACK };
 })();
 
 if (typeof module !== "undefined") module.exports = Palette;
