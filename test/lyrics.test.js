@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Lyrics = require("../ui/lyrics.js");
 const { richsyncToLrc, matches } = require("../musixmatch.js");
-const { neteaseToLrc } = require("../lyrics-sources.js");
+const { neteaseToLrc, liriqoToLrc } = require("../lyrics-sources.js");
 
 test("parseLRC reads line and word timings and sorts by start", () => {
   const r = Lyrics.parseLRC("[00:05.00] <00:05.00> hi <00:05.50> there <00:06.00>\n[00:01.50]first");
@@ -41,4 +41,13 @@ test("matches accepts the same song and rejects another", () => {
   assert.equal(matches("Love Story", "Taylor Swift", 400, "Love Story", "Taylor Swift", 236), false, "wrong length");
   assert.equal(matches("K.", "Cigarettes After Sex", 0, "K.", "Cigarettes After Sex", 0), true, "one-letter title");
   assert.equal(matches("Apocalypse", "Cigarettes After Sex", 0, "K.", "Cigarettes After Sex", 0), false);
+});
+
+test("liriqoToLrc keeps only word-timed lyrics for the same song", () => {
+  const lrc = "[ti:Second Best]\n[00:06.48]<00:06.48>I'll <00:07.86>never <00:08.61>forget <00:13.54>";
+  const data = { metadata: { title: "Second Best", artist: "Laufey", duration: "205" }, primary: { lrc } };
+  assert.equal(liriqoToLrc(data, "Laufey", "Second Best", 205), lrc);
+  assert.equal(liriqoToLrc(data, "Laufey", "Second Best", 260), "");                        // a different length is another recording
+  assert.equal(liriqoToLrc(data, "Laufey", "Another Song", 205), "");                       // a different song
+  assert.equal(liriqoToLrc({ ...data, primary: { lrc: "[00:06.48]I'll never forget" } }, "Laufey", "Second Best", 205), "");   // line-timed only
 });

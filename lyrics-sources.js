@@ -57,6 +57,23 @@ async function netease(artist, title, duration) {
   return neteaseToLrc(lyric?.yrc?.lyric);
 }
 
+// ---- LiriQo: a small unofficial service that serves Apple Music's word-timed lyrics, for songs Apple's own call came back short on ----
+const LIRIQO = "https://api.liriqo-alfarrizi.my.id/v1/lyrics";
+// The reply is only used when it is the same song (title and artist overlap, length within a few seconds) and really word-timed.
+function liriqoToLrc(data, artist, title, duration) {
+  const meta = data?.metadata || {}, lrc = data?.primary?.lrc;
+  if (!lrc || !worded(lrc)) return "";
+  if (!musixmatch.matches(meta.title || "", meta.artist || "", +meta.duration || 0, title, artist, duration)) return "";
+  return lrc;
+}
+async function liriqo(artist, title, duration) {
+  const q = new URLSearchParams({ title, artist, fast: "1", ...(duration > 0 ? { duration: String(Math.round(duration)) } : {}) });
+  try {
+    const r = await fetch(`${LIRIQO}?${q}`, { headers: LRCLIB, signal: AbortSignal.timeout(15000) });
+    return r.ok ? liriqoToLrc(await r.json(), artist, title, duration) : "";
+  } catch { return ""; }
+}
+
 // ---- LRCLIB: the open database, timed by the line ----
 const LRCLIB = { "User-Agent": "Orchard/1.0 (desktop music player)" };
 const worded = lrc => /<\d{1,3}:\d{2}(?:[.:]\d{1,3})?>/.test(lrc || "");
@@ -100,6 +117,8 @@ async function external({ artist, title, album, duration, wordSync }) {
   if (wordSync) {
     const lrc = await netease(artist, title, duration);
     if (lrc) return { text: lrc, source: "NetEase" };
+    const viaLiriqo = await liriqo(artist, title, duration);
+    if (viaLiriqo) return { text: viaLiriqo, source: "LiriQo" };
   }
   if (mxmFound) return { text: mxmFound.text, source: "Musixmatch" };
   const found = await lrclib(artist, title, album, duration);
@@ -112,4 +131,4 @@ async function external({ artist, title, album, duration, wordSync }) {
   return null;
 }
 
-module.exports = { external, setMusixmatchKey, musixmatchStatus, neteaseToLrc };
+module.exports = { external, setMusixmatchKey, musixmatchStatus, neteaseToLrc, liriqoToLrc };
