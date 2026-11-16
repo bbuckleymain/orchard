@@ -385,14 +385,14 @@ kbd { display: inline-block; min-width: 22px; padding: 0 6px; border-radius: 6px
 #fsBtn { position: absolute; top: 14px; right: 16px; z-index: 3; }
 #fsBtn .shrink, body.fs #fsBtn .expand { display: none; }
 body.fs #fsBtn .shrink { display: block; }
-body.fs header, body.fs .list-pane, body.fs .now-tabs, body.fs .mini, body.fs #paneQueue { display: none; }
+body.fs header, body.fs .list-pane, body.fs .now-tabs, body.fs .mini, body.fs #paneQueue, body.fs #paneQueue[hidden] { display: none; }
 body.fs #root { grid-template-rows: 1fr; }
 body.fs main { grid-template-columns: 1fr; gap: 0; padding: 0; }
 body.fs .now { border-radius: 0; border: 0; padding: 5vh 5vw 3.5vh; animation: fsIn .28s var(--ease); }
 body.fs .now::before { display: none; }
 body.fs .stage { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 5vw; }
 body.fs #paneNow[hidden], body.fs #paneLyrics[hidden] { display: flex; }
-body.fs #art { width: min(46vh, 34vw); height: min(46vh, 34vw); transform: scale(1); margin-bottom: 3vh; -webkit-box-reflect: none; }
+body.fs #art { width: min(46vh, 34vw); height: min(46vh, 34vw); transform: scale(1); margin-bottom: 3vh; -webkit-box-reflect: unset; }
 body.fs #title { font-size: clamp(26px, 3.2vw, 48px); animation: fsRise .3s var(--ease) 40ms backwards; }
 body.fs #artist { font-size: clamp(16px, 1.8vw, 24px); margin-top: .3em; animation: fsRise .3s var(--ease) 90ms backwards; }
 body.fs #lyrics { padding: 22vh 0 34vh; }
@@ -417,3 +417,32 @@ body.fs.idle #fsBtn { opacity: 0; pointer-events: none; }
   body.fs .now, body.fs #title, body.fs #artist { animation: none; }
   body.fs.idle .transport, body.fs.idle .lyrics-foot { transform: none; }
 }
+
+/* ---- mini player: Aero glass, the art in a glossy frame and the three buttons ---- */
+.eyebrow { display: none; }
+#miniBtn .to-full, body.mini #miniBtn .to-mini { display: none; }
+body.mini #miniBtn .to-full { display: block; }
+body.mini .list-pane, body.mini .now-tabs, body.mini .pills, body.mini #settingsBtn, body.mini .caption [data-win="max"], body.mini #fsBtn,
+body.mini .volume, body.mini #shuffle, body.mini #repeat, body.mini #fav, body.mini .mini { display: none; }
+body.mini main { grid-template-columns: 1fr; gap: 0; padding: 0 12px 12px; }
+body.mini .now { padding: 12px 20px 18px; animation: fsIn .28s var(--ease); }
+body.mini #art { width: 270px; height: 270px; margin-bottom: 14px; transform: scale(1); -webkit-box-reflect: unset;
+  box-shadow: 0 14px 36px rgba(0, 60, 120, .35), 0 0 46px rgba(130, 220, 255, .55); }
+body.mini .eyebrow { display: block; align-self: center; margin-bottom: 2px; font-size: 11px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--aqua-3); text-shadow: 0 1px 0 rgba(255, 255, 255, .8); }
+body.mini #title { font-size: 21px; }
+body.mini #artist { font-size: 14px; margin-top: 2px; }
+body.mini .transport { max-width: none; }
+body.mini .times { margin-bottom: 10px; }
+body.mini .controls { gap: 18px; }
+body.mini .round.big { width: 64px; height: 64px; }
+@media (prefers-reduced-motion: reduce) { body.mini .now { animation: none; } }
+
+/* fullscreen queue: the right-hand column shows it in place of the lyrics */
+#fsQueueBtn { display: none; position: absolute; top: 14px; right: 62px; z-index: 3; }
+body.fs #fsQueueBtn { display: grid; transition: opacity .3s var(--ease), transform .16s var(--ease), filter .2s; }
+body.fs.idle #fsQueueBtn { opacity: 0; pointer-events: none; }
+body.fs.showq #paneLyrics, body.fs.showq #paneLyrics[hidden] { display: none; }
+body.fs.showq #paneQueue, body.fs.showq #paneQueue[hidden] { display: flex; }
+body.fs.nolyr.showq .stage { grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); }
+body.fs #queue { padding: 8vh 0 12vh; font-size: clamp(15px, 1.4vw, 21px);
+  -webkit-mask-image: linear-gradient(transparent 0, #000 9%, #000 88%, transparent 100%); mask-image: linear-gradient(transparent 0, #000 9%, #000 88%, transparent 100%); }

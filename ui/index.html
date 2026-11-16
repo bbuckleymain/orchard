@@ -36,6 +36,10 @@
         <button class="pill" data-view="library">Library</button>
       </div>
       <div class="caption">
+        <button id="miniBtn" title="Mini player (N)" aria-label="Mini player">
+          <svg class="to-mini" viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="1.5"/><path d="M5 15V6a1 1 0 0 1 1-1h9"/></svg>
+          <svg class="to-full" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="1.5"/><path d="M9 15l6-6M10 9h5v5"/></svg>
+        </button>
         <button data-win="min" title="Minimize"><svg viewBox="0 0 24 24"><path d="M7 16h10"/></svg></button>
         <button data-win="max" title="Maximize"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/></svg></button>
         <button data-win="close" class="close" title="Close"><svg viewBox="0 0 24 24"><path d="M8 8l8 8M16 8l-8 8"/></svg></button>
@@ -62,6 +66,9 @@
       </section>
 
       <section class="glass now">
+        <button class="round small" id="fsQueueBtn" title="Queue (Q)" aria-label="Queue">
+          <svg viewBox="0 0 24 24"><path d="M4 7h12M4 12h12M4 17h7M18 13v6l4-3z"/></svg>
+        </button>
         <button class="round small" id="fsBtn" title="Fullscreen (F)" aria-label="Fullscreen">
           <svg class="expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
           <svg class="shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
@@ -75,6 +82,7 @@
         <div class="stage">
           <div class="pane" id="paneNow">
             <div id="art"><img id="artImg" alt=""></div>
+            <div class="eyebrow">now playing</div>
             <h1 id="title">Nothing playing</h1>
             <h2 id="artist">Pick a track from the list</h2>
           </div>

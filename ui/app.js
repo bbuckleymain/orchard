@@ -460,9 +460,9 @@ $("accAction").onclick = async () => {
 };
 
 // ---- right pane: Now Playing / Lyrics / Queue ----
-let pane = "now", fs = false;
+let pane = "now", fs = false, mini = false;
 function setPane(name) {
-  if (fs) return;                                   // fullscreen shows the art and the lyrics together
+  if (fs || mini) return;                                   // fullscreen shows the art and the lyrics together
   pane = name;
   document.querySelectorAll("[data-pane]").forEach(b => b.classList.toggle("on", b.dataset.pane === name));
   $("paneNow").hidden = name !== "now";
@@ -483,14 +483,35 @@ function wake() {                                    // controls and cursor come
 }
 function setFullscreen(on) {
   if (on === fs) return;
+  if (on && mini) setMini(false);
   fs = on;
   document.body.classList.toggle("fs", on);
   glass.fullscreen(on);
   cancelAnimationFrame(raf);
   if (on) { fsFrom = pane; loadLyrics(); lyrIdx = -2; raf = requestAnimationFrame(tick); wake(); }
-  else { clearTimeout(idleTimer); document.body.classList.remove("idle"); setPane(fsFrom); }
+  else { clearTimeout(idleTimer); document.body.classList.remove("idle"); setFsQueue(false); setPane(fsFrom); }
 }
+// ---- mini player: a small window with the art, the song and the buttons ----
+let miniFrom = "now";
+function setMini(on) {
+  if (on === mini) return;
+  if (on && fs) setFullscreen(false);
+  if (on) { miniFrom = pane; setPane("now"); }
+  mini = on;
+  document.body.classList.toggle("mini", on);
+  glass.mini(on);
+  if (!on) setPane(miniFrom);
+}
+$("miniBtn").onclick = () => setMini(!mini);
 $("fsBtn").onclick = () => setFullscreen(!fs);
+// In fullscreen the queue takes the lyrics' place until you ask for the lyrics back.
+const queueUp = () => document.body.classList.contains("showq");
+function setFsQueue(on) {
+  document.body.classList.toggle("showq", on);
+  $("fsQueueBtn").classList.toggle("on", on);
+  if (on) renderQueue(); else lyrIdx = -2;
+}
+$("fsQueueBtn").onclick = () => setFsQueue(!queueUp());
 $("art").addEventListener("dblclick", () => setFullscreen(!fs));
 glass.onFullscreenLeft(() => setFullscreen(false));  // the window manager took it out of fullscreen
 ["pointermove", "pointerdown", "keydown"].forEach(t => document.addEventListener(t, wake, { passive: true }));
@@ -632,7 +653,7 @@ showNudge();
 // cleared with Clear (click twice). The song that's playing is never touched, so playback carries on.
 let clearArmed = 0, clearTimer = 0, dragFrom = -1;
 function renderQueue() {
-  if (pane !== "queue" || !music || dragFrom >= 0) return;   // redrawn when the drag ends
+  if ((pane !== "queue" && !(fs && queueUp())) || !music || dragFrom >= 0) return;   // redrawn when the drag ends
   const ul = $("queue");
   const list = music.queue?.items || [];
   const pos = music.nowPlayingItemIndex ?? music.queue?.position ?? 0;
@@ -1355,8 +1376,9 @@ document.addEventListener("keydown", e => {
   switch (key) {
     case "/": e.preventDefault(); toggleSettings(false); $("q").focus(); $("q").select(); break;
     case "f": setFullscreen(!fs); break;
-    case "l": case "y": setPane(pane === "lyrics" ? "now" : "lyrics"); break;
-    case "q": setPane(pane === "queue" ? "now" : "queue"); break;
+    case "n": setMini(!mini); break;
+    case "l": case "y": if (fs) { setFsQueue(false); break; } setPane(pane === "lyrics" ? "now" : "lyrics"); break;
+    case "q": if (fs) { setFsQueue(!queueUp()); break; } setPane(pane === "queue" ? "now" : "queue"); break;
     case "m": toggleMute(); break;
     case "Backspace": back(); break;
     case " ": e.preventDefault(); $("play").click(); break;

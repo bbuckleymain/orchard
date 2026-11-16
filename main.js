@@ -17,7 +17,7 @@ if (process.platform === "linux") app.commandLine.appendSwitch("disable-features
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
 const WEB = "https://music.apple.com";
 const store = path.join(app.getPath("userData"), "account.bin");
-let win = null, port = 0;
+let win = null, port = 0, beforeMini = null;
 
 // ---- saved Apple Music sign-in (encrypted with the system keyring when available) ----
 // Without a keyring nothing is written to disk: the sign-in lasts until Orchard closes.
@@ -256,6 +256,15 @@ ipcMain.on("window", (_e, action) => {
   if (action === "close") win.close();
   else if (action === "min") win.minimize();
   else if (action === "max") win.isMaximized() ? win.unmaximize() : win.maximize();
+  else if (action === "mini") {                       // a small always-on-top player; the old size comes back afterwards
+    if (win.isMaximized()) win.unmaximize();
+    beforeMini ??= win.getBounds();
+    win.setMinimumSize(300, 440); win.setSize(360, 570); win.setAlwaysOnTop(true);
+  } else if (action === "unmini") {
+    win.setAlwaysOnTop(false); win.setMinimumSize(860, 580);
+    if (beforeMini) win.setBounds(beforeMini);
+    beforeMini = null;
+  }
   else if (action === "fullscreen") win.setFullScreen(true);
   else if (action === "windowed") win.setFullScreen(false);
 });

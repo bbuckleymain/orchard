@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("glass", {
   onLastfmProgress: cb => ipcRenderer.on("lastfm-progress", (_e, p) => cb(p)),
   window: action => ipcRenderer.send("window", action),
   onFullscreenLeft: cb => ipcRenderer.on("fullscreen-left", () => cb()),
+  mini: on => ipcRenderer.send("window", on ? "mini" : "unmini"),
   fullscreen: on => ipcRenderer.send("window", on ? "fullscreen" : "windowed"),
   mprisState: state => ipcRenderer.send("mpris-state", state),
   onMpris: cb => ipcRenderer.on("mpris", (_e, msg) => cb(msg)),
