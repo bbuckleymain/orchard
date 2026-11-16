@@ -621,14 +621,28 @@ function renderLyrics() {
 // The <audio> element MusicKit plays through has the real position. When a song follows on by itself,
 // MusicKit can move to another element and leave the old one sitting at the end of the last song, so
 // only an element that agrees with MusicKit's own (floored) time is believed.
+// Every media element that has been played. After a song follows on by itself MusicKit can play it on an element that is never put in the page, and
+// looking in the page alone then finds only the old one, left at the end of the last song.
+const played = new Set();
+const nativePlay = HTMLMediaElement.prototype.play;
+HTMLMediaElement.prototype.play = function (...args) { played.add(this); return nativePlay.apply(this, args); };
+
+// With no element to believe, count the time between MusicKit's whole seconds ourselves: the second just began when its number changed.
+let clock = { coarse: -1, at: 0, frac: 0, playing: false };
 function playTime() {
   const coarse = music.currentPlaybackTime || 0;
   let best = null;
-  for (const a of document.querySelectorAll("audio, video")) {
+  for (const a of new Set([...played, ...document.querySelectorAll("audio, video")])) {
     if (!a.currentSrc || !Number.isFinite(a.currentTime) || Math.abs(a.currentTime - coarse) > 1.5) continue;
     if (!best || (best.paused && !a.paused)) best = a;
   }
-  return best ? best.currentTime : coarse;
+  if (best) return best.currentTime;
+  const now = performance.now(), playing = !!music.isPlaying;
+  if (coarse !== clock.coarse) clock = { coarse, at: now, frac: 0, playing };
+  else if (playing && !clock.playing) { clock.at = now - clock.frac * 1000; clock.playing = true; }   // resumed: carry on from where it stopped
+  else if (!playing) clock.playing = false;
+  if (clock.playing) clock.frac = Math.min((now - clock.at) / 1000, 0.999);
+  return coarse + clock.frac;
 }
 
 // Runs every frame while the lyrics are on screen.
