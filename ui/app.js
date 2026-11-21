@@ -1062,22 +1062,32 @@ function localPage() {
       },
     };
   }
+  const sections = [];
+  if (localFilter === "all" || localFilter === "albums") {
+    sections.push({ title: "Albums", items: local.albums, layout: "covers" });
+  }
+  if (localFilter === "all" || localFilter === "artists") {
+    sections.push({ title: "Artists", items: local.artists, layout: "artists" });
+  }
+  if (localFilter === "all" || localFilter === "songs") {
+    sections.push({
+      title: "Songs", items: local.tracks.slice(0, 400), layout: "tracks",
+      note: local.tracks.length > 400 ? `Showing the first 400 of ${local.tracks.length}.` : "",
+    });
+  }
   return {
     title: "Local Files",
     sub: `${local.tracks.length} songs · ${local.albums.length} albums · ${local.artists.length} artists`,
-    sections: [
-      local.albums.length && { title: "Albums", items: local.albums, layout: "covers", shuffle: true },
-      local.artists.length && { title: "Artists", items: local.artists, layout: "artists" },
-      local.tracks.length && {
-        title: "Songs", items: local.tracks.slice(0, 400), layout: "tracks",
-        note: local.tracks.length > 400 ? `Showing the first 400 of ${local.tracks.length}.` : "",
-      },
-    ].filter(Boolean),
-    songs: local.tracks,
+    filters: { active: localFilter, items: LOCAL_FILTERS, kind: "local" },
+    sections,
+    songs: localFilter === "songs" ? local.tracks : undefined,
+    shuffleAlbums: localFilter === "all" || localFilter === "albums" ? local.albums : undefined,
   };
 }
 
 let libraryFilter = "albums";
+let localFilter = "all";
+const LOCAL_FILTERS = [["all", "All"], ["albums", "Albums"], ["artists", "Artists"], ["songs", "Songs"]];
 const LIBRARY_FILTERS = [
   ["albums", "Albums"], ["songs", "Songs"], ["artists", "Artists"], ["playlists", "Playlists"],
   ["recentAdded", "Recently Added"], ["recentPlayed", "Recently Played"], ["mostPlayed", "Most Played"],
@@ -1189,7 +1199,7 @@ function pageHead(page) {
   if (page.songs?.length) {
     const play = pillBtn("Play all", "primary", "i-play");
     play.onclick = () => playAll(page.songs, false);
-    const mix = pillBtn("Shuffle", "", "i-shuffle");
+    const mix = pillBtn("Shuffle songs", "", "i-shuffle");
     mix.onclick = () => playAll(page.songs, true);
     actions.append(play, mix);
     hasActions = true;
@@ -1451,7 +1461,7 @@ function renderSection(sec, root) {
     head.appendChild(el("h2", "", sec.title));
     if (sec.items.length) head.appendChild(el("span", "count", String(sec.items.length)));
     if (sec.shuffle) {
-      const b = el("button", "more", "Shuffle");
+      const b = el("button", "more", "Shuffle albums");
       b.type = "button";
       b.onclick = () => shuffleAlbums(sec.items);
       head.appendChild(b);
@@ -1472,7 +1482,10 @@ function filterBar(filters) {
   for (const [id, label] of filters.items) {
     const b = el("button", "chip" + (id === filters.active ? " on" : ""), label);
     b.type = "button";
-    b.onclick = () => { libraryFilter = id; load(); };
+    b.onclick = () => {
+      if (filters.kind === "local") localFilter = id; else libraryFilter = id;
+      load();
+    };
     bar.appendChild(b);
   }
   return bar;

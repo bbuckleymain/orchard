@@ -12,8 +12,9 @@ Home mixes Apple's recommendations with a **Continue listening** row and albums 
 catalogue and your files together, with **All / Apple Music / Your files** scopes and results that update as
 you type.
 
-**Shuffle albums** plays whole records in a random album order, keeping each album's own track order. If you
-only want a few, Cmd/Ctrl-click their covers first and use the selection bar.
+**Shuffle albums** plays whole records in a random album order, keeping each album's own track order. It is in
+Library → Albums and in Local Files. If you only want a few, Cmd/Ctrl-click their covers first and use the
+selection bar.
 
 The expanded player has a Queue tab. Drag to reorder, remove a track, clear Up Next, or use shuffle and
 repeat. Media keys, the desktop panel and scrobblers like Pano Scrobbler reach Orchard through MPRIS, for
@@ -24,6 +25,9 @@ both Apple Music and local files.
 Add folders or individual files. Orchard walks them, reads tags, lengths and cover art, and remembers the
 library between launches. FLAC is the primary format (STREAMINFO, VORBIS_COMMENT, PICTURE). Orchard reads MP3
 (ID3v2), M4A/MP4, WAV and AIFF too, and OGG/Opus play with file-name metadata.
+
+Local Files has All, Albums, Artists and Songs tabs. Shuffle albums plays every local record in a random
+order, each in its own track order.
 
 You can build playlists by hand: create a local playlist, then add or remove songs, albums or artists from
 any right-click menu. You can add to Apple playlists from the same menu when you are signed in.
