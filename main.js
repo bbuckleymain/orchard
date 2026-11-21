@@ -2,13 +2,14 @@
 // Works the way Cider does: Apple's own MusicKit JS runs in castLabs Electron (Chromium + Widevine),
 // with music.apple.com's public developer token and Apple's own sign-in page.
 // See CREDITS.md for the projects this draws on (GlassPlayer, Cider).
-const { app, BrowserWindow, components, ipcMain, session, safeStorage } = require("electron");
+const { app, BrowserWindow, components, ipcMain, session, safeStorage, dialog, shell } = require("electron");
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const lyricsSources = require("./lyrics-sources");
 const mpris = require("./mpris");
 const lastfm = require("./lastfm");
+const { LocalLibrary, isMedia, writeFlacLyrics } = require("./local-library");
 
 // On Linux Orchard publishes its own MPRIS player (see mpris.js), so Chromium's anonymous one is turned off:
 // two players for the same song would make scrobblers count it twice.
@@ -17,7 +18,7 @@ if (process.platform === "linux") app.commandLine.appendSwitch("disable-features
 const UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36";
 const WEB = "https://music.apple.com";
 const store = path.join(app.getPath("userData"), "account.bin");
-let win = null, port = 0;
+let win = null, port = 0, localLib = null;
 
 // ---- saved Apple Music sign-in (encrypted with the system keyring when available) ----
 // Without a keyring nothing is written to disk: the sign-in lasts until Orchard closes.
@@ -52,10 +53,47 @@ async function token(refresh = false) {
 }
 
 // ---- the UI is served from localhost, like Cider ----
-const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml" };
+const TYPES = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml",
+  ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp", ".gif": "image/gif",
+  ".avif": "image/avif", ".flac": "audio/flac", ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac",
+  ".ogg": "audio/ogg", ".oga": "audio/ogg", ".opus": "audio/ogg", ".wav": "audio/wav", ".aiff": "audio/aiff", ".aif": "audio/aiff" };
+
+// Audio and cover art for the local library. Ranges are honoured so seeking in a FLAC works
+// without the browser having to download the whole file first.
+function serveMedia(req, res) {
+  let file;
+  try { file = new URL(req.url, "http://127.0.0.1").searchParams.get("path"); } catch { res.writeHead(400).end(); return; }
+  if (!file || !isMedia(file)) { res.writeHead(403).end(); return; }
+  let stat;
+  try { stat = fs.statSync(file); } catch { res.writeHead(404).end(); return; }
+  if (!stat.isFile()) { res.writeHead(404).end(); return; }
+  const ext = path.extname(file).toLowerCase(), type = TYPES[ext] || "application/octet-stream";
+  const cache = /^\.(jpg|jpeg|png|webp|gif|avif)$/.test(ext) ? "public, max-age=86400" : "no-cache";
+  const range = req.headers.range;
+  if (range) {
+    const m = /^bytes=(\d*)-(\d*)$/.exec(range);
+    if (m) {
+      let start = m[1] ? parseInt(m[1], 10) : 0;
+      let end = m[2] ? parseInt(m[2], 10) : stat.size - 1;
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= stat.size) {
+        res.writeHead(416, { "Content-Range": `bytes */${stat.size}` }).end();
+        return;
+      }
+      end = Math.min(end, stat.size - 1);
+      res.writeHead(206, { "Content-Range": `bytes ${start}-${end}/${stat.size}`, "Accept-Ranges": "bytes",
+        "Content-Length": end - start + 1, "Content-Type": type, "Cache-Control": cache });
+      if (req.method === "HEAD") res.end(); else fs.createReadStream(file, { start, end }).pipe(res);
+      return;
+    }
+  }
+  res.writeHead(200, { "Content-Length": stat.size, "Content-Type": type, "Accept-Ranges": "bytes", "Cache-Control": cache });
+  if (req.method === "HEAD") res.end(); else fs.createReadStream(file).pipe(res);
+}
+
 function serve() {
   const root = path.join(__dirname, "ui");
   const server = http.createServer((req, res) => {
+    if (req.url.startsWith("/media?")) { serveMedia(req, res); return; }
     let file;
     try { file = path.join(root, path.normalize(decodeURIComponent(req.url.split("?")[0])).replace(/^(\.\.[/\\])+/, "")); }
     catch { res.writeHead(400).end(); return; }   // a malformed %-escape or null byte
@@ -74,8 +112,8 @@ function serve() {
 
 function createWindow() {
   win = new BrowserWindow({
-    width: 1020, height: 660, minWidth: 860, minHeight: 580,
-    frame: false, backgroundColor: "#121218", title: "Orchard", show: false,
+    width: 1080, height: 700, minWidth: 880, minHeight: 600,
+    frame: false, backgroundColor: "#ece7f1", title: "Orchard", show: false,
     icon: path.join(__dirname, "ui", "orchard.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -175,6 +213,167 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
+
+// ---- local files ----
+// The library lives in userData; the renderer asks for it on launch and after every change.
+// Scanning reports progress so a large folder doesn't look frozen.
+const progressFor = sender => p => { try { sender.send("local-progress", p); } catch {} };
+ipcMain.handle("local-library", () => localLib?.get() || { roots: [], tracks: [], albums: [], artists: [], excluded: [] });
+ipcMain.handle("local-add", async (e, kind) => {
+  if (!localLib) return null;
+  const files = kind === "files";
+  const options = {
+    title: files ? "Add music files" : "Add a music folder",
+    properties: files ? ["openFile", "multiSelections"] : ["openDirectory"],
+    ...(files ? { filters: [{ name: "Audio", extensions: ["flac", "mp3", "m4a", "mp4", "aac", "ogg", "oga", "opus", "wav", "aiff", "aif"] }] } : {}),
+  };
+  const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+  if (picked.canceled || !picked.filePaths.length) return null;
+  const state = await localLib.addPaths(picked.filePaths, progressFor(e.sender));
+  if (state) runLyricsJob(missingLyrics(state.tracks), { sender: e.sender });
+  return state;
+});
+ipcMain.handle("local-rescan", async e => {
+  if (!localLib) return null;
+  const state = await localLib.rescan(progressFor(e.sender));
+  if (state) runLyricsJob(missingLyrics(state.tracks), { sender: e.sender });
+  return state;
+});
+ipcMain.handle("local-remove-root", (_e, p) => localLib?.removeRoot(p) || null);
+ipcMain.handle("local-remove-track", (_e, p) => localLib?.removeTrack(p) || null);
+ipcMain.handle("local-clear", () => localLib?.clear() || null);
+ipcMain.handle("local-lyrics", (_e, p) => localLib?.lyricsFor(p) || "");
+ipcMain.handle("local-reveal", (_e, p) => { if (p) shell.showItemInFolder(p); });
+
+// ---- lyrics: LRCLIB after a scan, embedded into FLAC, a sidecar for the rest --------------------
+const SYNCED = /\[\d{1,3}:\d{2}(?:[.:]\d{1,3})?\]/;
+const isSyncedLyrics = text => SYNCED.test(String(text || ""));
+
+function sidecarFor(file) {
+  return path.join(path.dirname(file), path.basename(file, path.extname(file)) + ".lrc");
+}
+
+// A timed sidecar always replaces a plain one; a plain result only fills a gap.
+function writeSidecar(file, text, force) {
+  const dest = sidecarFor(file);
+  try {
+    if (!force && fs.existsSync(dest)) {
+      const old = fs.readFileSync(dest, "utf8");
+      if (isSyncedLyrics(old)) return false;
+    }
+    fs.writeFileSync(dest, String(text).replace(/\r\n/g, "\n"), "utf8");
+    return true;
+  } catch { return false; }
+}
+
+async function fetchLyricsFor(track, { force = false } = {}) {
+  if (!track?.path) return { found: false };
+  const info = localLib?.lyricsInfo(track.path);
+  if (!force && info && info.mtimeMs === track.mtimeMs && info.done) {
+    return { found: !!info.found, synced: !!info.synced, cached: true };
+  }
+  const existing = localLib?.lyricsFor(track.path) || "";
+  if (!force && isSyncedLyrics(existing)) {
+    localLib?.setLyricsInfo(track.path, { mtimeMs: track.mtimeMs, done: true, found: true, synced: true, source: "file" });
+    return { found: true, synced: true, cached: true };
+  }
+
+  const found = await lyricsSources.lrclib(track.artist || "", track.title || "", track.album || "", (track.ms || 0) / 1000);
+  if (!found || (!found.synced && !found.plain)) {
+    localLib?.setLyricsInfo(track.path, { mtimeMs: track.mtimeMs, done: true, found: false, synced: false });
+    return { found: false };
+  }
+
+  const text = found.synced || found.plain;
+  const synced = !!found.synced;
+  writeSidecar(track.path, text, force || synced);
+  if (synced && path.extname(track.path).toLowerCase() === ".flac" && writeFlacLyrics(track.path, text)) {
+    try {
+      const st = fs.statSync(track.path);
+      track.mtimeMs = st.mtimeMs;
+      track.size = st.size;
+      localLib?.save();
+    } catch {}
+  }
+  localLib?.setLyricsInfo(track.path, { mtimeMs: track.mtimeMs, done: true, found: true, synced, source: "LRCLIB" });
+  return { found: true, synced, text, source: "LRCLIB" };
+}
+
+function missingLyrics(tracks) {
+  return (tracks || []).filter(t => {
+    const info = localLib?.lyricsInfo(t.path);
+    if (info && info.mtimeMs === t.mtimeMs && info.done) return false;
+    return !isSyncedLyrics(localLib?.lyricsFor(t.path) || "");
+  });
+}
+
+let lyricsJob = 0;
+async function runLyricsJob(tracks, { force = false, sender = null } = {}) {
+  if (!tracks.length) { try { sender?.send("local-lyrics-progress", { done: 0, total: 0, found: 0, finished: true }); } catch {} return; }
+  const job = ++lyricsJob;
+  const total = tracks.length;
+  let done = 0, found = 0;
+  const send = p => { try { sender?.send("local-lyrics-progress", p); } catch {} };
+  for (let i = 0; i < tracks.length; i += 3) {
+    if (job !== lyricsJob) break;
+    const batch = tracks.slice(i, i + 3);
+    const results = await Promise.all(batch.map(t => fetchLyricsFor(t, { force }).catch(() => ({ found: false }))));
+    for (const r of results) if (r?.found) found++;
+    done += batch.length;
+    send({ done, total, found, file: batch[batch.length - 1]?.path || "", title: batch[batch.length - 1]?.title || "" });
+  }
+  send({ done: total, total, found, finished: true });
+}
+
+ipcMain.handle("local-fetch-lyrics", async (_e, file) => {
+  if (!localLib) return null;
+  const track = localLib.get().tracks.find(t => t.path === file);
+  if (!track) return null;
+  return fetchLyricsFor(track, { force: true });
+});
+ipcMain.handle("local-fetch-lyrics-missing", e => {
+  if (!localLib) return { total: 0 };
+  const todo = missingLyrics(localLib.get().tracks);
+  runLyricsJob(todo, { sender: e.sender });
+  return { total: todo.length };
+});
+ipcMain.handle("local-fetch-lyrics-all", e => {
+  if (!localLib) return { total: 0 };
+  const tracks = localLib.get().tracks;
+  runLyricsJob(tracks, { force: true, sender: e.sender });
+  return { total: tracks.length };
+});
+
+// ---- artist photos for the lyrics stage (Deezer, cached in userData) -----------------------------
+const artistPhotoFile = () => path.join(app.getPath("userData"), "artist-photos.json");
+let artistPhotos = {};
+function loadArtistPhotos() {
+  try { artistPhotos = JSON.parse(fs.readFileSync(artistPhotoFile(), "utf8")); } catch { artistPhotos = {}; }
+}
+function saveArtistPhotos() {
+  try { fs.writeFileSync(artistPhotoFile(), JSON.stringify(artistPhotos)); } catch {}
+}
+async function artistPhoto(name) {
+  const key = String(name || "").trim().toLowerCase();
+  if (!key) return "";
+  if (key in artistPhotos) return artistPhotos[key] || "";
+  try {
+    const r = await fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(name)}&limit=1`, { signal: AbortSignal.timeout(6000) });
+    if (r.ok) {
+      const data = await r.json();
+      const a = data?.data?.[0];
+      const url = a?.picture_xl || a?.picture_big || a?.picture_medium || a?.picture || "";
+      artistPhotos[key] = url;
+      saveArtistPhotos();
+      return url;
+    }
+  } catch {}
+  artistPhotos[key] = "";
+  saveArtistPhotos();
+  return "";
+}
+ipcMain.handle("artist-photo", (_e, name) => artistPhoto(name));
+
 ipcMain.on("window", (_e, action) => {
   if (!win) return;
   if (action === "close") win.close();
@@ -203,6 +402,8 @@ app.whenReady().then(async () => {
     cb({ requestHeaders: d.requestHeaders });
   });
   port = await serve();
+  loadArtistPhotos();
+  localLib = new LocalLibrary(app.getPath("userData"));
   loadMusixmatchKey();
   await components.whenReady(); // Widevine CDM is downloaded/updated here on first launch
   console.log("[Orchard] Widevine:", JSON.stringify(components.status()));

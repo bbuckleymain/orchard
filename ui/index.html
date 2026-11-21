@@ -2,188 +2,360 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Orchard</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="themes.css">
 </head>
 <body>
-  <div id="ambient">
-    <div class="sun"></div>
-    <div class="hill h1"></div>
-    <div class="hill h2"></div>
-    <img id="glow" alt="">
-    <div class="bubbles">
-      <i style="--x:8%;--s:60px;--d:19s;--w:-2s"></i><i style="--x:22%;--s:26px;--d:14s;--w:-9s"></i>
-      <i style="--x:37%;--s:44px;--d:23s;--w:-5s"></i><i style="--x:55%;--s:18px;--d:12s;--w:-1s"></i>
-      <i style="--x:68%;--s:72px;--d:27s;--w:-14s"></i><i style="--x:81%;--s:30px;--d:16s;--w:-7s"></i>
-      <i style="--x:92%;--s:48px;--d:21s;--w:-11s"></i><i style="--x:46%;--s:22px;--d:17s;--w:-3s"></i>
-    </div>
+  <svg id="sprite" aria-hidden="true">
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.7 12 3l9 7.7"/><path d="M5.2 9.4V21h13.6V9.4"/><path d="M9.6 21v-6.2h4.8V21"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.2 20c.8-3.4 3-5.2 5.8-5.2s5 1.8 5.8 5.2"/><circle cx="17.2" cy="9" r="2.4"/><path d="M16.2 14.9c2.2.4 3.6 2 4.2 4.5"/></symbol>
+    <symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.6"/><path d="M12 3v3.4M12 17.6V21M3 12h3.4M17.6 12H21"/></symbol>
+    <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M3 7h3.5c2 0 3.3 1 4.5 3l2 4c1.2 2 2.5 3 4.5 3H21M18 14l3 3-3 3M3 17h3.5c1.4 0 2.5-.5 3.4-1.5M14.1 8.5c.9-1 2-1.5 3.4-1.5H21M18 4l3 3-3 3"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20.4S4.4 15.8 4.4 10.6A4.4 4.4 0 0 1 12 7.1a4.4 4.4 0 0 1 7.6 3.5c0 5.2-7.6 9.8-7.6 9.8Z"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.4 2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3.2 13.9 9l5.8 1.9-5.8 1.9L12 18.6l-1.9-5.8L4.3 10.9 10.1 9Z"/><path d="M19 3v3M17.5 4.5h3M5 18v3M3.5 19.5h3"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V6l11-2v12"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2.4"/><circle cx="8.4" cy="14" r="1.6"/><path d="M7.2 8 17 4.2M14 12.4h4M14 15.6h2.6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.2A2.2 2.2 0 0 1 5.2 5h3.6l2 2h8A2.2 2.2 0 0 1 21 9.2v8.6A2.2 2.2 0 0 1 18.8 20H5.2A2.2 2.2 0 0 1 3 17.8Z"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 6v5h-5"/><path d="M4 18v-5h5"/><path d="M18.6 9A7 7 0 0 0 6.4 6.6L4 11"/><path d="M5.4 15a7 7 0 0 0 12.2 2.4L20 13"/></symbol>
+    <symbol id="i-back" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+    <symbol id="i-min" viewBox="0 0 24 24"><path d="M6 12h12"/></symbol>
+    <symbol id="i-max" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5v14l11-7Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M7 5h4v14H7zM13 5h4v14h-4z"/></symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M6 5h2v14H6zM20 5v14L9 12z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M16 5h2v14h-2zM4 5v14l11-7z"/></symbol>
+    <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></symbol>
+    <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/></symbol>
+    <symbol id="i-lyrics" viewBox="0 0 24 24"><path d="M5 4.5h14v11H9.5L5 20z"/><path d="M8.5 8.5h7M8.5 11.5h4.5"/></symbol>
+    <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h10M4 11h10M4 16h6"/><path d="M18 9v7.2a2.3 2.3 0 1 0 1.8 2.2V11h2V9z"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M9 4H4v5M15 20h5v-5M4 4l6 6M20 20l-6-6"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle fill="currentColor" stroke="none" cx="5" cy="12" r="1.7"/><circle fill="currentColor" stroke="none" cx="12" cy="12" r="1.7"/><circle fill="currentColor" stroke="none" cx="19" cy="12" r="1.7"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.8h6V7M6.4 7l.9 13h9.4l.9-13M10 11v5.5M14 11v5.5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5 9.5 17 19 7"/></symbol>
+    <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13.5a4.5 4.5 0 0 0 6.4 0l2-2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1"/><path d="M14 10.5a4.5 4.5 0 0 0-6.4 0l-2 2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1"/></symbol>
+    <symbol id="i-eq" viewBox="0 0 24 24"><path d="M4 20V11M9 20V5M14 20v-6M19 20V8"/><path d="M2.5 11h3M7.5 5h3M12.5 14h3M17.5 8h3"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2.2M12 19.8V22M2 12h2.2M19.8 12H22M4.9 4.9l1.6 1.6M17.5 17.5l1.6 1.6M19.1 4.9l-1.6 1.6M6.5 17.5l-1.6 1.6"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 3.2 2.7 5.6 6.1.8-4.5 4.3 1.2 6-5.5-3-5.5 3 1.2-6-4.5-4.3 6.1-.8Z"/></symbol>
+    <symbol id="i-chevron-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.4"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2.2"/><circle cx="9" cy="17" r="2.2"/></symbol>
+  </svg>
+
+  <div id="backdrop" aria-hidden="true">
+    <div class="bg-layer" id="bgA"></div>
+    <div class="bg-layer" id="bgB"></div>
+    <div id="bgArt"></div>
+    <div class="bg-veil"></div>
   </div>
 
-  <div id="root">
-    <header>
-      <div class="brand">
-        <button class="round" id="settingsBtn" title="Settings">
-          <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>
+  <div id="app">
+    <header id="titlebar">
+      <div class="tb-side">
+        <button id="sidebarToggle" class="icon-btn" title="Show or hide the sidebar" aria-label="Toggle sidebar">
+          <svg class="icon"><use href="#i-sidebar"/></svg>
         </button>
-        <span class="name">Orchard</span>
+        <button id="settingsBtn" class="icon-btn" title="Settings" aria-label="Settings">
+          <svg class="icon"><use href="#i-settings"/></svg>
+        </button>
       </div>
-      <div class="pills">
-        <button class="pill" data-view="home">Home</button>
-        <button class="pill on" data-view="search">Search</button>
-        <button class="pill" data-view="recent">Recent</button>
-        <button class="pill" data-view="albums">Albums</button>
-        <button class="pill" data-view="library">Library</button>
-      </div>
-      <div class="caption">
-        <button data-win="min" title="Minimize"><svg viewBox="0 0 24 24"><path d="M7 16h10"/></svg></button>
-        <button data-win="max" title="Maximize"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1"/></svg></button>
-        <button data-win="close" class="close" title="Close"><svg viewBox="0 0 24 24"><path d="M8 8l8 8M16 8l-8 8"/></svg></button>
+      <div class="tb-drag" aria-hidden="true"></div>
+      <div class="tb-window">
+        <button data-win="min" title="Minimize" aria-label="Minimize"><svg class="icon"><use href="#i-min"/></svg></button>
+        <button data-win="max" title="Maximize" aria-label="Maximize"><svg class="icon"><use href="#i-max"/></svg></button>
+        <button data-win="close" class="close" title="Close" aria-label="Close"><svg class="icon"><use href="#i-close"/></svg></button>
       </div>
     </header>
 
-    <main>
-      <section class="glass list-pane">
-        <div class="search">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input id="q" placeholder="Songs, artists, or an Apple Music link" autocomplete="off" spellcheck="false">
-        </div>
-        <div id="filters" class="chips">
-          <button class="chip on" data-type="all">All</button>
-          <button class="chip" data-type="songs">Songs</button>
-          <button class="chip" data-type="albums">Albums</button>
-          <button class="chip" data-type="artists">Artists</button>
-          <button class="chip" data-type="playlists">Playlists</button>
-        </div>
-        <button id="crumb" hidden><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg><span id="crumbText">Back</span></button>
-        <div id="listTitle" hidden></div>
-        <ul id="list"></ul>
-        <p id="status">Starting Apple Music…</p>
-      </section>
+    <aside id="sidebar">
+      <div class="side-brand">
+        <img src="orchard.svg" alt="" width="30" height="30">
+        <span>Orchard</span>
+      </div>
+      <div class="side-scroll">
+        <nav class="side-nav" aria-label="Main">
+          <button class="nav-item" data-view="home"><svg class="icon"><use href="#i-home"/></svg><span>Home</span></button>
+          <button class="nav-item" data-view="search"><svg class="icon"><use href="#i-search"/></svg><span>Search</span></button>
+          <button class="nav-item" data-view="library"><svg class="icon"><use href="#i-list"/></svg><span>Library</span></button>
+          <button class="nav-item" data-view="local">
+            <svg class="icon"><use href="#i-folder"/></svg><span>Local Files</span><span id="localCount" class="count" hidden></span>
+          </button>
+        </nav>
+      </div>
+      <div class="side-foot">
+        <button id="accountBtn" class="account-chip" title="Apple Music account">
+          <span class="status-dot" id="accountDot"></span>
+          <span class="account-copy"><span id="accountName">Not connected</span><span id="accountDetail">Apple Music</span></span>
+          <svg class="icon"><use href="#i-chevron-right"/></svg>
+        </button>
+      </div>
+    </aside>
 
-      <section class="glass now">
-        <div class="pills now-tabs">
-          <button class="pill on" data-pane="now">Now Playing</button>
-          <button class="pill" data-pane="lyrics">Lyrics</button>
-          <button class="pill" data-pane="queue">Queue</button>
+    <main id="main">
+      <div id="topbar">
+        <button id="backBtn" class="icon-btn" title="Back" aria-label="Back" hidden><svg class="icon"><use href="#i-back"/></svg></button>
+        <div class="searchbox" id="searchbox">
+          <svg class="icon"><use href="#i-search"/></svg>
+          <input id="q" placeholder="Search songs, albums, artists and files" autocomplete="off" spellcheck="false" aria-label="Search">
+          <button id="clearSearch" class="icon-btn tiny" title="Clear search" aria-label="Clear search" hidden><svg class="icon"><use href="#i-close"/></svg></button>
         </div>
+        <div class="top-actions">
+          <button id="layoutGrid" class="icon-btn" title="Grid view" aria-label="Grid view"><svg class="icon"><use href="#i-grid"/></svg></button>
+          <button id="layoutList" class="icon-btn" title="List view" aria-label="List view"><svg class="icon"><use href="#i-list"/></svg></button>
+          <button id="refreshBtn" class="icon-btn" title="Refresh" aria-label="Refresh"><svg class="icon"><use href="#i-refresh"/></svg></button>
+        </div>
+      </div>
+      <div id="selectionBar" class="selection-bar" hidden>
+        <span id="selectionCount"></span>
+        <button id="selectionShuffle" class="pill-btn primary" type="button"><svg class="icon"><use href="#i-shuffle"/></svg>Shuffle albums</button>
+        <button id="selectionClear" class="ghost-btn" type="button">Clear</button>
+      </div>
+      <div id="content" class="scroll" tabindex="-1"></div>
+    </main>
 
-        <div class="stage">
-          <div class="pane" id="paneNow">
-            <div id="art"><img id="artImg" alt=""></div>
-            <h1 id="title">Nothing playing</h1>
-            <h2 id="artist">Pick a track from the list</h2>
+    <footer id="mini" class="glass-strong" aria-label="Now playing">
+      <button id="miniArtWrap" class="mini-art" title="Open now playing" aria-label="Open now playing">
+        <img id="miniArt" alt="">
+        <span id="miniArtFallback" class="art-fallback" hidden></span>
+      </button>
+      <div class="mini-meta">
+        <div id="miniTitle" class="mini-title">Nothing playing</div>
+        <div id="miniArtist" class="mini-artist">Choose something to start</div>
+      </div>
+      <button id="miniFav" class="icon-btn heart-btn" title="Favorite" aria-label="Favorite"><svg class="icon"><use href="#i-heart"/></svg></button>
+      <div class="mini-controls">
+        <button id="miniPrev" class="icon-btn" title="Previous" aria-label="Previous"><svg class="icon"><use href="#i-prev"/></svg></button>
+        <button id="miniPlay" class="play-btn small" title="Play" aria-label="Play"><svg class="icon"><use href="#i-play"/></svg></button>
+        <button id="miniNext" class="icon-btn" title="Next" aria-label="Next"><svg class="icon"><use href="#i-next"/></svg></button>
+      </div>
+      <div class="mini-progress">
+        <span id="miniCur">0:00</span>
+        <div id="miniSeekWrap" class="seekline" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+          <div class="seekline-track"><div id="miniSeekFill" class="seekline-fill"></div></div>
+          <div id="miniSeekKnob" class="seekline-knob"></div>
+        </div>
+        <span id="miniDur">0:00</span>
+      </div>
+      <div class="mini-extra">
+        <button id="miniStage" class="icon-btn" title="Lyrics stage (F)" aria-label="Lyrics stage"><svg class="icon"><use href="#i-mic"/></svg></button>
+        <button id="miniLyrics" class="icon-btn" title="Lyrics (Y)" aria-label="Lyrics"><svg class="icon"><use href="#i-lyrics"/></svg></button>
+        <button id="miniQueue" class="icon-btn" title="Queue (Q)" aria-label="Queue"><svg class="icon"><use href="#i-queue"/></svg></button>
+        <button id="miniVolumeIcon" class="icon-btn" title="Mute (M)" aria-label="Mute"><svg class="icon"><use href="#i-volume"/></svg></button>
+        <input id="miniVol" class="vol-slider" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+        <button id="miniExpand" class="icon-btn" title="Expand player" aria-label="Expand player"><svg class="icon"><use href="#i-expand"/></svg></button>
+      </div>
+      <div id="miniStatusLine" class="mini-status-line" aria-hidden="true"></div>
+    </footer>
+  </div>
+
+  <div id="status" role="status" aria-live="polite"></div>
+
+  <section id="player" hidden aria-label="Now playing">
+    <div class="player-bg" aria-hidden="true"><img id="playerBgArt" alt=""><div class="player-veil"></div></div>
+    <div class="player-top">
+      <button id="playerCollapse" class="icon-btn" title="Collapse" aria-label="Collapse"><svg class="icon"><use href="#i-chevron-down"/></svg></button>
+      <div class="player-tabs" role="tablist" aria-label="Player panes">
+        <button class="tab on" data-pane="queue" role="tab" aria-selected="true">Queue</button>
+        <button class="tab" data-pane="lyrics" role="tab" aria-selected="false">Lyrics</button>
+        <button class="tab" data-pane="eq" role="tab" aria-selected="false">Equalizer</button>
+      </div>
+      <div class="player-top-spacer" aria-hidden="true"></div>
+    </div>
+    <div class="player-body">
+      <div class="player-left">
+        <div id="art" class="player-art">
+          <img id="artImg" alt="">
+          <div id="artFallback" class="art-fallback" hidden></div>
+        </div>
+        <div class="player-info">
+          <h1 id="title">Nothing playing</h1>
+          <div class="player-sub"><span id="artist">Pick a track</span><span id="album"></span></div>
+          <div class="player-seek">
+            <input type="range" id="seek" min="0" max="1" step="0.001" value="0" aria-label="Position">
+            <div class="times"><span id="cur">0:00</span><span id="dur" title="Click to show time left">0:00</span></div>
           </div>
+          <div class="player-controls">
+            <button id="shuffle" class="icon-btn" title="Shuffle" aria-label="Shuffle"><svg class="icon"><use href="#i-shuffle"/></svg></button>
+            <button id="prev" class="round mid" title="Previous" aria-label="Previous"><svg class="icon"><use href="#i-prev"/></svg></button>
+            <button id="play" class="play-btn" title="Play" aria-label="Play"><svg class="icon"><use href="#i-play"/></svg></button>
+            <button id="next" class="round mid" title="Next" aria-label="Next"><svg class="icon"><use href="#i-next"/></svg></button>
+            <button id="repeat" class="icon-btn" title="Repeat" aria-label="Repeat"><svg class="icon"><use href="#i-repeat"/></svg><span id="repeatOne">1</span></button>
+          </div>
+          <div class="player-utility">
+            <button id="playerFav" class="icon-btn heart-btn" title="Favorite" aria-label="Favorite"><svg class="icon"><use href="#i-heart"/></svg></button>
+            <button id="playerVolumeIcon" class="icon-btn" title="Mute (M)" aria-label="Mute"><svg class="icon"><use href="#i-volume"/></svg></button>
+            <input id="vol" class="vol-slider" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
+            <span id="badge" class="badge" hidden>256 kbps</span>
+          </div>
+        </div>
+      </div>
 
-          <div class="pane" id="paneLyrics" hidden>
-            <div class="mini"><img class="miniArt" alt=""><div><div class="miniTitle"></div><div class="miniArtist"></div></div></div>
-            <div id="lyrics"></div>
-            <div class="lyrics-foot">
-              <span id="lyricsSource"></span>
-              <span class="nudge">
-                <button id="nudgeLess" title="Words later (−0.1 s)">−</button>
-                <span id="nudgeVal" title="Lyric timing offset">0.0 s</span>
-                <button id="nudgeMore" title="Words earlier (+0.1 s)">+</button>
-              </span>
+      <div class="player-right">
+        <div class="pane" id="paneQueue">
+          <div class="pane-head">
+            <div><div class="pane-title">Queue</div><div class="pane-sub" id="queueSub">What's playing and what's next</div></div>
+            <button id="queueClear" class="ghost-btn" title="Clear everything after the current song">Clear Up Next</button>
+          </div>
+          <ul id="queue"></ul>
+        </div>
+
+        <div class="pane" id="paneLyrics" hidden>
+          <div class="pane-head lyrics-head">
+            <div><div class="pane-title">Lyrics</div><div class="pane-sub" id="lyricsSource"></div></div>
+            <div class="nudge" aria-label="Lyric timing">
+              <button id="nudgeLess" title="Words later (−0.1 s)" aria-label="Words later">−</button>
+              <span id="nudgeVal" title="Lyric timing offset">0.0 s</span>
+              <button id="nudgeMore" title="Words earlier (+0.1 s)" aria-label="Words earlier">+</button>
             </div>
           </div>
-
-          <div class="pane" id="paneQueue" hidden>
-            <div class="mini"><img class="miniArt" alt=""><div><div class="miniTitle"></div><div class="miniArtist"></div></div></div>
-            <ul id="queue"></ul>
-          </div>
+          <div id="lyrics"></div>
         </div>
 
-        <div class="transport">
-          <div class="seekwrap"><input type="range" id="seek" min="0" max="1" step="0.1" value="0" aria-label="Position"><span id="seekTip"></span></div>
-          <div class="times"><span id="cur">0:00</span><span id="dur" title="Click to show time left">0:00</span></div>
-          <div class="controls">
-            <button class="round small" id="shuffle" title="Shuffle"><svg viewBox="0 0 24 24"><path d="M3 7h3.5c2 0 3.3 1 4.5 3l2 4c1.2 2 2.5 3 4.5 3H21M18 14l3 3-3 3M3 17h3.5c1.4 0 2.5-.5 3.4-1.5M14.1 8.5c.9-1 2-1.5 3.4-1.5H21M18 4l3 3-3 3"/></svg></button>
-            <button class="round mid" id="prev" title="Previous"><svg viewBox="0 0 24 24"><path class="fill" d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
-            <button class="round big" id="play" title="Play"><svg viewBox="0 0 24 24"><path class="fill" id="playIcon" d="M7 4v16l13-8z"/></svg></button>
-            <button class="round mid" id="next" title="Next"><svg viewBox="0 0 24 24"><path class="fill" d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
-            <button class="round small" id="repeat" title="Repeat"><svg viewBox="0 0 24 24"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"/></svg><span id="repeatOne">1</span></button>
+        <div class="pane" id="paneEq" hidden>
+          <div class="pane-head">
+            <div><div class="pane-title">Equalizer</div><div class="pane-sub" id="eqSub">Five bands for local files</div></div>
+            <label class="switch-line"><span>On</span><input type="checkbox" id="eqOn" class="toggle" aria-label="Equalizer on"></label>
           </div>
-          <div class="volume">
-            <button id="volIcon" title="Mute (M)"><svg viewBox="0 0 24 24"><path class="fill" d="M4 9h4l5-4v14l-5-4H4z"/><path class="waves" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/><path class="slash" d="M16 9l5 6M21 9l-5 6"/></svg></button>
-            <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
-            <div id="badge" class="badge" hidden>256 kbps AAC</div>
+          <div class="eq-presets" id="eqPresets">
+            <button data-eq-preset="flat" class="chip on">Flat</button>
+            <button data-eq-preset="warm" class="chip">Warm</button>
+            <button data-eq-preset="bright" class="chip">Bright</button>
+            <button data-eq-preset="vocal" class="chip">Vocal</button>
+            <button data-eq-preset="bass" class="chip">Bass</button>
           </div>
+          <div class="eq-bands" id="eqBands">
+            <label class="eq-band"><span class="eq-val" data-eq-val="60">0</span><input type="range" data-eq="60" min="-12" max="12" step="1" value="0" aria-label="60 Hz"><span>60</span></label>
+            <label class="eq-band"><span class="eq-val" data-eq-val="250">0</span><input type="range" data-eq="250" min="-12" max="12" step="1" value="0" aria-label="250 Hz"><span>250</span></label>
+            <label class="eq-band"><span class="eq-val" data-eq-val="1000">0</span><input type="range" data-eq="1000" min="-12" max="12" step="1" value="0" aria-label="1 kHz"><span>1k</span></label>
+            <label class="eq-band"><span class="eq-val" data-eq-val="4000">0</span><input type="range" data-eq="4000" min="-12" max="12" step="1" value="0" aria-label="4 kHz"><span>4k</span></label>
+            <label class="eq-band"><span class="eq-val" data-eq-val="12000">0</span><input type="range" data-eq="12000" min="-12" max="12" step="1" value="0" aria-label="12 kHz"><span>12k</span></label>
+          </div>
+          <div class="eq-note" id="eqNote">The equalizer is applied to local files. Apple Music's protected stream can't be routed through it.</div>
         </div>
-      </section>
-    </main>
-  </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="stage" hidden aria-label="Lyrics stage">
+    <div id="stageArt" aria-hidden="true"></div>
+    <div id="stageScrim" aria-hidden="true"></div>
+    <div id="stageTop">
+      <div class="stage-meta"><div id="stageTitle"></div><div id="stageArtist"></div></div>
+      <button id="stageClose" class="icon-btn" title="Close (Esc)" aria-label="Close"><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
+    <div id="stageLyrics" class="scroll"></div>
+  </section>
 
   <div id="overlay" hidden>
     <div id="dim"></div>
-    <div id="sheet" class="glass">
+    <div id="sheet" class="glass-strong">
       <div class="sheet-head">
-        <h3>Settings</h3>
-        <button class="round" id="closeSettings" title="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+        <h2>Settings</h2>
+        <button class="icon-btn" id="closeSettings" title="Close" aria-label="Close"><svg class="icon"><use href="#i-close"/></svg></button>
       </div>
-      <p class="section">Appearance</p>
+
+      <p class="sheet-section">Appearance</p>
       <div class="themes" id="themes">
-        <button class="theme" data-theme-pick="aero"><span class="swatch"></span>Aero</button>
-        <button class="theme" data-theme-pick="night"><span class="swatch"></span>Night Aero</button>
-        <button class="theme" data-theme-pick="catppuccin"><span class="swatch"></span>Catppuccin</button>
+        <button class="theme" data-theme-pick="aero">
+          <span class="swatch swatch-glass"></span>
+          <span class="theme-copy"><span>Glass</span><span>Light, tinted by the album</span></span>
+          <svg class="icon check"><use href="#i-check"/></svg>
+        </button>
+        <button class="theme" data-theme-pick="night">
+          <span class="swatch swatch-night"></span>
+          <span class="theme-copy"><span>Night</span><span>Dark glass, same tint</span></span>
+          <svg class="icon check"><use href="#i-check"/></svg>
+        </button>
       </div>
-      <p class="section">Account</p>
+
+      <p class="sheet-section">Account</p>
       <div class="card account">
-        <div class="am-icon"><svg viewBox="0 0 24 24"><path class="fill" d="M9 18V6l11-2v12"/><circle class="fill" cx="6" cy="18" r="3"/><circle class="fill" cx="17" cy="16" r="3"/></svg></div>
+        <div class="am-icon"><svg class="icon"><use href="#i-music"/></svg></div>
         <div class="who">
           <div id="accName">Apple Music</div>
           <div id="accDetail" class="muted"></div>
         </div>
         <button class="action" id="accAction">Connect</button>
       </div>
-      <p class="section">Sound</p>
+
+      <p class="sheet-section">Local library</p>
       <div class="card">
-        <div>Audio quality</div>
-        <div class="muted">Always High Quality, 256 kbps AAC: the best Apple Music sends to web players such as Cider. Orchard locks it there so it never drops to 64 kbps on a slow connection.</div>
+        <div class="local-stats" id="localStats">No folders added yet.</div>
+        <div class="button-row">
+          <button class="action" id="localAddFolder">Add folder</button>
+          <button class="action subtle" id="localAddFiles">Add files</button>
+          <button class="action subtle" id="localRescan">Rescan</button>
+          <button class="action subtle" id="localLyricsAll">Re-download every lyric…</button>
+          <button class="action danger" id="localClear">Clear library</button>
+        </div>
+        <div class="progress-track" id="localProgressTrack" hidden><div id="localProgressBar"></div></div>
+        <div class="muted" id="localProgressText"></div>
+        <ul class="root-list" id="localRoots"></ul>
+        <p class="muted small">FLAC tags and cover art are read directly. MP3, M4A, OGG, Opus, WAV and AIFF play too. Nothing is uploaded.</p>
       </div>
-      <p class="section">Lyrics</p>
+
+      <p class="sheet-section">Playback</p>
       <label class="card toggle-row">
-        <div><div>Word-by-word lyrics</div><div class="muted">Light words up as they're sung when the lyrics are timed that finely (Apple Music, NetEase). Off shows whole lines.</div></div>
+        <div><div>Remember volume</div><div class="muted">Keep the volume between launches</div></div>
+        <input type="checkbox" id="rememberVol" class="toggle">
+      </label>
+      <label class="card toggle-row" style="margin-top:8px">
+        <div><div>Autoplay</div><div class="muted">Keep playing when the queue ends</div></div>
+        <input type="checkbox" id="autoplaySetting" class="toggle">
+      </label>
+
+      <p class="sheet-section">Lyrics</p>
+      <label class="card toggle-row">
+        <div><div>Look for word-by-word lyrics</div><div class="muted">Light words up as they're sung when the source is timed that finely. Off shows whole lines.</div></div>
         <input type="checkbox" id="wordSync" class="toggle">
       </label>
       <div class="card" style="margin-top:8px">
         <div>Musixmatch API key</div>
         <div class="muted">Optional. With your own key (a paid plan for timed lyrics), Musixmatch is asked first. Stored encrypted.</div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <input id="mxmKey" type="password" placeholder="Paste your key" style="flex:1;padding:6px 10px;border-radius:10px;border:1px solid rgba(0,80,140,.3)">
+        <div class="inline-row">
+          <input id="mxmKey" type="password" placeholder="Paste your key" autocomplete="off">
           <button class="action" id="mxmSave">Save</button>
         </div>
-        <div class="muted" id="mxmStatus" style="margin-top:6px"></div>
+        <div class="muted" id="mxmStatus"></div>
       </div>
-      <div class="card" style="margin-top:8px">
+
+      <p class="sheet-section">Last.fm</p>
+      <div class="card">
         <div>Favourite your most-played Last.fm songs</div>
-        <div class="muted">Needs a Last.fm API key (free, last.fm/api/account/create), stored encrypted, and an Apple Music sign-in. Nothing is added until you press Add.</div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <input id="lfmKey" type="password" placeholder="Last.fm API key" style="flex:1;padding:6px 10px;border-radius:10px;border:1px solid rgba(0,80,140,.3)">
+        <div class="muted">Needs a free Last.fm API key, stored encrypted, and an Apple Music sign-in. Nothing is added until you press Add.</div>
+        <div class="inline-row">
+          <input id="lfmKey" type="password" placeholder="Last.fm API key" autocomplete="off">
           <button class="action" id="lfmKeySave">Save</button>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px;align-items:center">
-          <input id="lfmUser" placeholder="Last.fm username" style="flex:1;padding:6px 10px;border-radius:10px;border:1px solid rgba(0,80,140,.3)">
-          <input id="lfmMin" type="number" min="1" value="10" title="Plays or more" style="width:64px;padding:6px 10px;border-radius:10px;border:1px solid rgba(0,80,140,.3)">
+        <div class="inline-row">
+          <input id="lfmUser" placeholder="Last.fm username" autocomplete="off">
+          <input id="lfmMin" class="narrow" type="number" min="1" value="10" title="Plays or more">
           <span class="muted">plays or more</span>
         </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="action" id="lfmClear">Remove my current favourites…</button>
-        </div>
-        <div style="display:flex;gap:8px;margin-top:8px">
-          <button class="action" id="lfmPreview">Preview</button>
+        <div class="button-row">
+          <button class="action subtle" id="lfmClear">Remove my current favourites…</button>
+          <button class="action subtle" id="lfmPreview">Preview</button>
           <button class="action" id="lfmTest" disabled>Add 3 as a test</button>
           <button class="action" id="lfmAdd" disabled>Add all</button>
         </div>
-        <div class="muted" id="lfmStatus" style="margin-top:6px"></div>
-        <details style="margin-top:6px"><summary class="muted">Songs not found on Apple Music</summary><pre class="muted" id="lfmMissing" style="white-space:pre-wrap;max-height:120px;overflow:auto"></pre></details>
+        <div class="muted" id="lfmStatus"></div>
+        <details><summary class="muted">Songs not found on Apple Music</summary><pre class="muted" id="lfmMissing"></pre></details>
       </div>
-      <p class="section">Playback</p>
-      <label class="card toggle-row">
-        <div><div>Remember volume</div><div class="muted">Keep the volume between launches</div></div>
-        <input type="checkbox" id="rememberVol" class="toggle">
-      </label>
-      <p class="section">Keyboard</p>
+
+      <p class="sheet-section">Keyboard</p>
       <div class="card">
         <dl class="keys">
           <dt><kbd>Space</kbd></dt><dd>Play / pause</dd>
@@ -192,16 +364,28 @@
           <dt><kbd>↑</kbd><kbd>↓</kbd></dt><dd>Volume up / down (or scroll over the volume slider)</dd>
           <dt><kbd>M</kbd></dt><dd>Mute</dd>
           <dt><kbd>/</kbd> or <kbd>Ctrl</kbd><kbd>F</kbd></dt><dd>Search</dd>
-          <dt><kbd>L</kbd></dt><dd>Lyrics</dd>
+          <dt><kbd>L</kbd><kbd>Y</kbd></dt><dd>Lyrics panel</dd>
+          <dt><kbd>F</kbd></dt><dd>Full-screen lyrics stage</dd>
           <dt><kbd>Q</kbd></dt><dd>Queue</dd>
+          <dt><kbd>E</kbd></dt><dd>Expand or collapse the player</dd>
           <dt><kbd>Backspace</kbd></dt><dd>Back</dd>
-          <dt><kbd>Esc</kbd></dt><dd>Close menus and settings</dd>
+          <dt><kbd>Esc</kbd></dt><dd>Close menus, player and settings</dd>
         </dl>
+      </div>
+
+      <p class="sheet-section">About</p>
+      <div class="card about">
+        <img src="orchard.svg" alt="" width="42" height="42">
+        <div>
+          <div>Orchard</div>
+          <div class="muted">A calm Apple Music and local-file player. Not affiliated with Apple. GPL-3.0.</div>
+        </div>
       </div>
     </div>
   </div>
 
-  <div id="menu" hidden></div>
+  <div id="menu" hidden role="menu"></div>
+  <audio id="localAudio" preload="metadata"></audio>
 
   <script src="lyrics.js"></script>
   <script src="queue.js"></script>

@@ -1,38 +1,60 @@
 # Orchard
 
-A simple Apple Music player for Linux, in the spirit of [GlassPlayer](https://github.com/Jonzu00/GlassPlayer), with a Frutiger Aero look.
+Orchard plays Apple Music and the music you own in the same window. Apple's MusicKit JS runs inside a
+castLabs Electron build with Widevine, the way Cider does it, while Orchard scans and tags your local files
+itself, and both sources share one transport and one queue.
 
-It plays Apple Music the same way Cider does: Apple's own MusicKit JS runs inside
-[castLabs Electron](https://github.com/castlabs/electron-releases) (Chromium with Widevine DRM),
-using the public developer token from the music.apple.com web player and Apple's own sign-in page.
+## What it does
 
-- Tabs: Home (For You), Search, Recent, Albums and Library (Playlists, Artists, Albums, Songs, Recently Added)
-- Search songs, albums, artists and playlists together, or filter to one kind; artist pages show top songs and albums
-- Paste a `music.apple.com` album or playlist link into the search box to load it
-- Right-click anything for Play, Shuffle, Play Next, Add to Queue, Add to Library and Add to Playlist
-- Shuffles are truly uniform: Fisher–Yates driven by the system's cryptographic random source, which also
-  replaces `Math.random` for MusicKit's own shuffle button
-- **Synced lyrics** (<kbd>L</kbd>), done the Aerwave way: the line being sung is sharp, the rest dim and blur with
-  distance, words fill in as they're sung, instrumental breaks of 5 s or more show three dots that grow, click a line
-  to jump there, and a ± timing nudge for lyrics that run early or late. Sources, best first: Apple Music's own
-  (timed by the syllable, with background vocals and duet sides, the way Cider shows them), NetEase (word by word),
-  LRCLIB (line by line)
-- **Queue** (<kbd>Q</kbd>): what's playing and up next, click to jump, shuffle and repeat; right-click a song,
-  album or playlist for *Play Next* / *Add to Queue*. Drag songs in Up Next to rearrange them, remove one with its ×,
-  or clear Up Next (click *Clear* twice); right-click a queued song to move it up, down, to the top or bottom. The
-  song that's playing carries on through all of it
-- Three themes in Settings → Appearance: **Aero** (the original sky-and-grass look), **Night Aero** (the same
-  glossy glass after dark, with a moon and stars) and **Catppuccin** (Mocha: flat, soft and dark)
-- Keyboard: <kbd>Space</kbd> play/pause, <kbd>←</kbd>/<kbd>→</kbd> seek 5 s, <kbd>Shift</kbd>+<kbd>←</kbd>/<kbd>→</kbd>
-  previous/next, <kbd>↑</kbd>/<kbd>↓</kbd> volume, <kbd>M</kbd> mute, <kbd>/</kbd> or <kbd>Ctrl</kbd>+<kbd>F</kbd> search
-  (all listed in Settings). Scroll over the volume slider to change it, click the speaker to mute, hover the seek bar
-  to see where you'd land, and click the song length to show the time left instead
-- Streams at High Quality, 256 kbps AAC (the most Apple sends to web players), locked so it never drops to 64 kbps
-- Its own MPRIS player on Linux (`org.mpris.MediaPlayer2.orchard`, "Orchard") with the real song length,
-  album, artwork and position, so media keys, the panel and scrobblers like Pano Scrobbler work properly
-  (allow "Orchard" in your scrobbler once; the name no longer changes between launches)
+### Listening
 
-Needs an Apple Music subscription for full songs; without signing in you get 30 second previews.
+Home mixes Apple's recommendations with a **Continue listening** row and albums from disk. Search covers the
+catalogue and your files together, with **All / Apple Music / Your files** scopes and results that update as
+you type.
+
+**Shuffle albums** plays whole records in a random album order, keeping each album's own track order. If you
+only want a few, Cmd/Ctrl-click their covers first and use the selection bar.
+
+The expanded player has a Queue tab. Drag to reorder, remove a track, clear Up Next, or use shuffle and
+repeat. Media keys, the desktop panel and scrobblers like Pano Scrobbler reach Orchard through MPRIS, for
+both Apple Music and local files.
+
+### Your files
+
+Add folders or individual files. Orchard walks them, reads tags, lengths and cover art, and remembers the
+library between launches. FLAC is the primary format (STREAMINFO, VORBIS_COMMENT, PICTURE). Orchard reads MP3
+(ID3v2), M4A/MP4, WAV and AIFF too, and OGG/Opus play with file-name metadata.
+
+You can build playlists by hand: create a local playlist, then add or remove songs, albums or artists from
+any right-click menu. You can add to Apple playlists from the same menu when you are signed in.
+
+The five-band equalizer (Flat, Warm, Bright, Vocal, Bass) works on local files only. Web Audio cannot process
+Apple's protected stream. The library stays in Electron's user data directory, and Orchard uploads nothing.
+
+### Lyrics
+
+The lyrics panel (`Y` or `L`) reads a `.lrc` next to the file first, then lyrics embedded in the file
+(FLAC `LYRICS`, ID3 `USLT`, MP4 `©lyr`). Timed lines highlight and scroll, clicking a line seeks there, and
+untimed lyrics show as plain text.
+
+After a scan Orchard asks LRCLIB about tracks without timed lyrics. Orchard writes a timed answer into the
+FLAC tag and replaces a plain sidecar with it. If only plain text exists, it uses that. Right-click a local
+song for **Fetch lyrics**, or use **Re-download every lyric…** in Settings to ask again for the whole library.
+
+Word-by-word timing comes from NetEase when **Look for word-by-word lyrics** is on, and the line fills word
+by word. Instrumental gaps of five seconds or more show three growing dots.
+
+The full-screen stage (`F`, or the mic button in the player bar) puts large words over the artist's Deezer
+photo, cached after the first play. The current line lights up, clicking seeks, and `Esc` leaves.
+
+### The window
+
+The accent, tints and background come from the current cover and crossfade when the track changes. Two
+themes share that palette: **Glass** (light) and **Night** (dark glass).
+
+There are four destinations: Home, Search, Library and Local Files. Library keeps Albums, Songs, Artists,
+Playlists, Recently Added, Recently Played, Most Played, Favorites and Radios as filters. The icon is a flat
+green apple with a beamed music note.
 
 ## Install
 
@@ -40,55 +62,93 @@ Needs an Apple Music subscription for full songs; without signing in you get 30 
 ./install.sh
 ```
 
-This installs Orchard into `~/.local/share/orchard`, adds an `orchard` command in `~/.local/bin`, and puts
-**Orchard** in your application menu with its apple icon. Run it again after changing the code to update the
-installed copy; `./install.sh --remove` uninstalls it (your sign-in and settings in `~/.config/Orchard` stay).
+The script copies the app to `~/.local/share/orchard`, writes `~/.local/bin/orchard`, and adds an
+application-menu entry and icons. Run it again after changing the code. `./install.sh --remove` uninstalls the
+app and leaves your sign-in and settings in `~/.config/Orchard` alone.
 
-The first run fetches castLabs Electron. npm 12 blocks remote tarballs and install scripts by default, so the
-project's `.npmrc` allows the castLabs tarball and the installer fetches the Electron binary itself.
-On first launch the Widevine CDM is downloaded automatically.
+The first install fetches castLabs Electron; the first launch downloads Widevine. `.npmrc` already allows the
+castLabs tarball and the Electron install script, and the installer fetches the binary itself.
 
-To run it from the source folder without installing: `npm start`.
+To run from the source folder:
 
-To use your own Apple Developer token instead of the web player's, set `APPLE_MUSIC_DEVELOPER_TOKEN`.
+```bash
+npm install
+npm start
+```
 
-### If it won't start
-
-castLabs Electron's zygote crashes at startup (`zygote_host_impl_linux.cc ... Invalid argument`) when the
-`CHROME_DESKTOP` environment variable is set, which happens when it's launched from inside another Chromium app's
-terminal. The `orchard` launcher clears it; if you start Electron some other way, run `unset CHROME_DESKTOP` first.
+If Electron dies at startup with a `zygote_host_impl_linux.cc` error, a `CHROME_DESKTOP` variable inherited
+from another Chromium app causes it. The installed launcher clears it; for a manual start, run
+`unset CHROME_DESKTOP` first.
 
 ## Windows
-
-Orchard runs on Windows too. Build the installer and a portable zip (cross-builds from Linux with wine):
 
 ```bash
 npm install
 npm run dist:win
 ```
 
-The files land in `dist/`: `Orchard-Setup-<version>-x64.exe` and `Orchard-<version>-win-x64.zip`.
+The installer and portable zip land in `dist/`. Build on Windows, or cross-build from Linux with wine.
+Widevine on Windows needs a VMP-signed castLabs build: install `castlabs-evs`, sign up once, and
+`npm run dist:win` signs the app. Set `ORCHARD_REQUIRE_VMP=1` to fail an unsigned build instead of warning.
 
-**Widevine on Windows needs a VMP-signed build.** Apple's licence server, like most, only hands keys to
-Electron builds that castLabs has signed (Cider's Windows build is signed the same way). Signing is free:
+## Keys
 
-```bash
-pip install --user castlabs-evs
-python3 -m castlabs_evs.account signup
-```
+| Key | Action |
+|---|---|
+| `Space` | Play / pause |
+| `←` / `→` | Seek 5 seconds |
+| `Shift` + `←` / `→` | Previous / next |
+| `↑` / `↓` | Volume |
+| `M` | Mute |
+| `Y` or `L` | Lyrics panel |
+| `F` | Full-screen lyrics stage |
+| `Q` | Queue |
+| `E` | Expand / collapse the player |
+| `Backspace` | Back |
+| `/` or `Ctrl`+`F` | Search |
+| `Esc` | Close menus, player, stage or settings |
 
-After that, `npm run dist:win` signs the app automatically (see `build/vmp-sign.js`). Set
-`ORCHARD_REQUIRE_VMP=1` to make an unsigned build fail instead of only warning.
+## Where the data lives
 
-## Credits
+Electron's user data directory (`~/.config/Orchard` on Linux):
 
-Orchard's look and starting point come from [GlassPlayer](https://github.com/Jonzu00/GlassPlayer) by Jonzu00,
-and the way it plays Apple Music (MusicKit JS in castLabs Electron, with the music.apple.com origin and sign-in)
-comes from [Cider](https://github.com/ciderapp/Cider). Lyrics come from Apple Music, [LRCLIB](https://lrclib.net)
-and NetEase. See [CREDITS.md](CREDITS.md) for the details.
+- `account.bin`: the encrypted Apple Music token, when a system keyring is available.
+- `local-library.json`: scan roots and track metadata.
+- `local-cache.json`: tag-read cache.
+- `local-lyrics.json`: which files were checked for lyrics and whether the result was timed.
+- `artist-photos.json`: Deezer artist-photo URLs.
+- `covers/`: cover art extracted from files.
+- `Local Storage/`: preferences, local playlists, likes and play counts (scoped to the app's origin).
 
-Orchard is unofficial and not affiliated with Apple. Apple Music is a trademark of Apple Inc.
+## Limits
 
-## License
+- Full songs need an Apple Music subscription; without signing in, Apple tracks play as 30-second previews.
+  Local files need no account.
+- The equalizer only works on local files.
+- Orchard embeds lyrics into FLAC tags; MP3, M4A, WAV and AIFF use the `.lrc` sidecar, which it reads first.
+- Orchard matches Deezer photos by artist name and caches them, so an ambiguous name can pick the wrong photo.
+- Install Pano Scrobbler and allow it to see "Orchard" once.
 
-GPL-3.0, same as GlassPlayer.
+## Working on it
+
+- `npm test` runs the parser, queue, lyrics and Last.fm tests with Node's built-in runner; they build their own
+  fixtures and need no network.
+- `node --check <file>` is the only static check. There is no lint or build step for the renderer.
+- Close Orchard before running `./install.sh` again.
+
+## Project docs
+
+- `PRODUCT.md`: what the app is for and the product constraints.
+- `DESIGN.md`: tokens, type scale and component specs.
+- `AGENTS.md`: notes for coding agents working in this repo.
+- `CREDITS.md`: the projects and services Orchard draws on.
+
+## Credits and license
+
+Orchard's layout and original look started with GlassPlayer, and the MusicKit-in-Electron approach follows
+Cider. castLabs Electron supplies Widevine. Lyrics come from Apple Music, NetEase, LRCLIB and, optionally,
+Musixmatch; see `CREDITS.md`.
+
+Orchard is not affiliated with Apple. Apple Music is a trademark of Apple Inc.
+
+Orchard is GPL-3.0, the same license as GlassPlayer.

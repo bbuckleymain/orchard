@@ -112,4 +112,4 @@ async function external({ artist, title, album, duration, wordSync }) {
   return null;
 }
 
-module.exports = { external, setMusixmatchKey, musixmatchStatus, neteaseToLrc };
+module.exports = { external, lrclib, setMusixmatchKey, musixmatchStatus, neteaseToLrc };

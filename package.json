@@ -2,7 +2,7 @@
   "name": "orchard",
   "productName": "Orchard",
   "version": "1.0.0",
-  "description": "A simple Apple Music player for Linux in the style of GlassPlayer. MusicKit JS + Widevine, like Cider.",
+  "description": "Apple Music and local-file player for Linux and Windows. MusicKit JS + Widevine in castLabs Electron, with a FLAC-first local library.",
   "main": "main.js",
   "license": "GPL-3.0",
   "scripts": {
@@ -30,6 +30,8 @@
       "main.js",
       "preload.js",
       "lyrics-sources.js",
+      "lastfm.js",
+      "local-library.js",
       "mpris.js",
       "musixmatch.js",
       "package.json",
