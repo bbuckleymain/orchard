@@ -918,6 +918,12 @@ summary { cursor: pointer; }
 .review-song { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
 .review-artist { margin-top: 3px; font-size: var(--text-md); color: var(--ink-2); }
 .review-album { margin-top: 2px; font-size: var(--text-xs); color: var(--ink-3); }
+.review-transport { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.review-transport .icon-btn { width: 28px; height: 28px; flex: none; }
+.review-transport .icon-btn .icon { width: 15px; height: 15px; }
+.review-transport .seekline { flex: 1; }
+.review-transport span { flex: none; min-width: 30px; font-size: var(--text-xs); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.review-transport span:last-child { text-align: right; }
 .review-actions { display: flex; align-items: center; gap: 28px; }
 .review-btn {
   width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center;

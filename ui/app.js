@@ -2498,19 +2498,47 @@ async function maybeAutoCreateSuggested() {
 
 // ---- playlist reviewer ---------------------------------------------------------------------------
 // Right-click a playlist (or use its "…" menu) and go through it a song at a time: keep it or remove it.
-// The decisions live in ui/review.js; this is the card, the two buttons and the keys.
+// The decisions live in ui/review.js; this is the card, the transport, the two buttons and the keys.
 let review = null;
+let reviewRaf = 0;
 
+// Local playlists drop the id straight away. Apple's public API has no way to remove a track from a library
+// playlist (DELETE answers 404), so those removals are collected and the playlist is rebuilt once at the end.
 async function removeFromPlaylist(item, song) {
-  if (item.local) {
-    const pl = item.playlist || localPlaylists.find(p => p.id === item.id);
-    if (!pl) throw new Error("playlist not found");
-    pl.trackIds = (pl.trackIds || []).filter(id => id !== song.id);
-    saveLocalPlaylists();
-    return;
+  const pl = item.playlist || localPlaylists.find(p => p.id === item.id);
+  if (!pl) throw new Error("playlist not found");
+  pl.trackIds = (pl.trackIds || []).filter(id => id !== song.id);
+  saveLocalPlaylists();
+}
+
+// Rebuilds an Apple playlist without the rejected songs, then tries to delete the old one. Returns the new
+// playlist's id, and a note for the user when the old copy could not be removed.
+async function applyReviewChanges(item, songs, removed) {
+  if (!removed.length || item.local) return { id: item.id, note: "" };
+  const gone = new Set(removed.map(s => s.id));
+  const kept = songs.filter(s => !gone.has(s.id));
+  const id = await createApplePlaylist(item.title || "Playlist", kept);
+  try { await amp("DELETE", `/v1/me/library/playlists/${item.id}`); }
+  catch {
+    return { id, note: `Apple doesn't let apps remove tracks, so “${item.title}” was rebuilt as a new playlist — the old copy is still in your library.` };
   }
-  if (!item.canEdit) throw new Error("this playlist can't be edited");
-  await amp("DELETE", `/v1/me/library/playlists/${item.id}/tracks/${song.id}`);
+  return { id, note: "" };
+}
+
+function reviewTick() {
+  if (!review) return;
+  const dur = currentDuration(), cur = currentTime();
+  $("reviewCur").textContent = fmt(cur);
+  $("reviewDur").textContent = fmt(dur);
+  const pct = dur ? clamp(cur / dur, 0, 1) * 100 : 0;
+  $("reviewSeekFill").style.width = pct + "%";
+  $("reviewSeekKnob").style.left = pct + "%";
+  $("reviewSeek").setAttribute("aria-valuenow", String(Math.round(pct)));
+  $("reviewSeek").setAttribute("aria-valuemax", String(Math.round(dur)));
+  const playing = isPlaying();
+  $("reviewPlay").querySelector("use").setAttribute("href", playing ? "#i-pause" : "#i-play");
+  $("reviewPlay").setAttribute("aria-label", playing ? "Pause" : "Play");
+  reviewRaf = requestAnimationFrame(reviewTick);
 }
 
 function paintReview() {
@@ -2522,6 +2550,7 @@ function paintReview() {
   $("reviewDone").hidden = !run.done;
   if (run.done) {
     $("reviewSummary").textContent = `${run.kept} kept · ${run.rejected} removed`;
+    $("reviewFinish").textContent = !review.local && run.rejected ? "Apply and close" : "Done";
     return;
   }
   const song = run.current;
@@ -2539,11 +2568,13 @@ async function openReviewer(item) {
     const songs = await tracksOf(item);
     status("");
     if (!songs.length) throw new Error("this playlist is empty");
-    review = { item, songs, run: OrchardReview.createReviewer(songs), busy: false, local: !!songs[0].local };
+    review = { item, songs, run: OrchardReview.createReviewer(songs), busy: false, local: !!songs[0].local, removed: [] };
     $("reviewTitle").textContent = item.title || "Playlist";
     $("reviewer").hidden = false;
     paintReview();
     await startReviewAudio();
+    cancelAnimationFrame(reviewRaf);
+    reviewTick();
   } catch (e) { status("Couldn't review that playlist: " + (e?.message || e), true); }
 }
 
@@ -2582,12 +2613,23 @@ function pauseReviewAudio() {
 
 async function closeReviewer() {
   if (!review) return;
-  const item = review.item;
+  const { item, songs, removed } = review;
   pauseReviewAudio();
+  cancelAnimationFrame(reviewRaf);
+  reviewRaf = 0;
   review = null;
   $("reviewer").hidden = true;
+  let shown = item;
+  if (removed.length && !item.local) {
+    status("Applying the removals…");
+    try {
+      const { id, note } = await applyReviewChanges(item, songs, removed);
+      shown = id === item.id ? item : { ...item, id };
+      status(note, !!note);
+    } catch (e) { status("Couldn't apply the removals: " + (e?.message || e), true); }
+  }
   if (lastPage?.hero?.item?.id === item.id) {          // the page on screen is the playlist that changed
-    try { renderPage(await playlistPage(item)); } catch {}
+    try { renderPage(await playlistPage(shown)); } catch {}
   }
 }
 
@@ -2595,8 +2637,12 @@ async function decideReview(keep) {
   if (!review || review.busy || review.run.done) return;
   review.busy = true;
   const card = $("reviewCard");
+  const song = review.run.current;
   try {
-    if (!keep) await removeFromPlaylist(review.item, review.run.current);   // only advance once it's gone
+    if (!keep) {
+      if (review.local) await removeFromPlaylist(review.item, song);   // immediate for local files
+      else review.removed.push(song);                                   // Apple: rebuild once at the end
+    }
     card.classList.add(keep ? "leaving-right" : "leaving-left");
     await new Promise(done => setTimeout(done, 170));
     card.classList.remove("leaving-right", "leaving-left");
@@ -2613,6 +2659,21 @@ $("reviewKeep").onclick = () => decideReview(true);
 $("reviewReject").onclick = () => decideReview(false);
 $("reviewClose").onclick = closeReviewer;
 $("reviewFinish").onclick = closeReviewer;
+$("reviewPlay").onclick = () => togglePlay();
+
+// Drag or tap the bar under the card to move through the song, like the mini player's line.
+function reviewSeekAt(e) {
+  const r = $("reviewSeek").getBoundingClientRect();
+  seekTo(clamp((e.clientX - r.left) / r.width, 0, 1) * currentDuration());
+}
+$("reviewSeek").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  $("reviewSeek").setPointerCapture(e.pointerId);
+  reviewSeekAt(e);
+});
+$("reviewSeek").addEventListener("pointermove", e => {
+  if ($("reviewSeek").hasPointerCapture(e.pointerId)) reviewSeekAt(e);
+});
 
 // ---- the queue ---------------------------------------------------------------------------------
 // Up Next can be rearranged by dragging, a song removed with its × (or the right-click menu), and the lot

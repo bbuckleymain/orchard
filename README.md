@@ -33,9 +33,10 @@ You can build playlists by hand: **Library → Playlists → New playlist** make
 signed in, in your Apple Music library. Add or remove songs, albums or artists from any right-click menu.
 
 **Review Playlist…** (right-click a playlist, or its “…” menu) goes through it one song at a time, Tinder
-style: the cover and track on a card, and the song plays as it appears. **←** removes it from the playlist,
-**→** keeps it, **Space** pauses. The header shows how far through you are and the end screen counts what you
-kept and removed.
+style: the cover and track on a card, and the song plays as it appears, with play/pause and a seek bar under
+the title. **←** removes it from the playlist, **→** keeps it, **Space** pauses. The header shows how far
+through you are and the end screen counts what you kept and removed. Local playlists change as you go; Apple
+playlists are rebuilt once at the end, because Apple's API doesn't let an app remove a track from one.
 
 **Import from Spotify** (Settings) takes a public Spotify playlist link, finds each track on Apple Music and
 creates a playlist with the same name; anything it could not find is listed. Without credentials it reads

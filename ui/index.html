@@ -458,6 +458,16 @@
           <div class="review-artist" id="reviewArtist"></div>
           <div class="review-album" id="reviewAlbum"></div>
         </div>
+        <div class="review-transport">
+          <button id="reviewPlay" class="icon-btn" aria-label="Pause"><svg class="icon"><use href="#i-pause"/></svg></button>
+          <span id="reviewCur">0:00</span>
+          <div id="reviewSeek" class="seekline" role="slider" tabindex="0" aria-label="Position"
+               aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+            <div class="seekline-track"><div id="reviewSeekFill" class="seekline-fill"></div></div>
+            <div id="reviewSeekKnob" class="seekline-knob"></div>
+          </div>
+          <span id="reviewDur">0:00</span>
+        </div>
       </div>
       <div class="review-done" id="reviewDone" hidden>
         <div class="review-done-icon"><svg class="icon"><use href="#i-spark"/></svg></div>
