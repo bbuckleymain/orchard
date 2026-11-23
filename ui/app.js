@@ -742,6 +742,45 @@ function toItem(s) {
   };
 }
 
+// A song's album and artist, for "Go to Album" and "Go to Artist": the catalogue answers with both
+// relationships in one call, then the song's own link, then a search by name as the last resort.
+async function relationsOf(item) {
+  const id = item.catalogId || item.playId || item.id;
+  if (!music?.isAuthorized || !id) return {};
+  try {
+    const r = await music.api.music(`/v1/catalog/{{storefrontId}}/songs/${id}`, { include: "albums,artists" });
+    const d = r?.data?.data?.[0];
+    const album = d?.relationships?.albums?.data?.[0];
+    const artist = d?.relationships?.artists?.data?.[0];
+    return { album: album ? toItem(album) : null, artist: artist ? toItem(artist) : null };
+  } catch { return {}; }
+}
+
+async function albumOfSong(item) {
+  const rel = await relationsOf(item);
+  if (rel.album) return rel.album;
+  const id = /\/album\/[^/]*\/(\d+)/.exec(item.url || "")?.[1];
+  if (id) return { kind: "album", id, title: item.album || item.title, artist: item.artist, art: item.art };
+  if (!item.album) return null;
+  try {
+    const r = await music.api.music(`/v1/catalog/{{storefrontId}}/search`,
+      { term: `${item.album} ${item.artist || ""}`.trim(), types: "albums", limit: 1 });
+    const hit = r?.data?.results?.albums?.data?.[0];
+    return hit ? toItem(hit) : null;
+  } catch { return null; }
+}
+
+async function artistOfSong(item) {
+  const rel = await relationsOf(item);
+  if (rel.artist) return rel.artist;
+  if (!item.artist) return null;
+  try {
+    const r = await music.api.music(`/v1/catalog/{{storefrontId}}/search`, { term: item.artist, types: "artists", limit: 1 });
+    const hit = r?.data?.results?.artists?.data?.[0];
+    return hit ? toItem(hit) : null;
+  } catch { return null; }
+}
+
 async function amp(method, path, body) {
   const send = () => fetch("https://amp-api.music.apple.com" + path, {
     method,
@@ -2017,6 +2056,22 @@ const ACTIONS = {
     return `Added to your library: ${item.title}`;
   },
   async open(item) { await open(item); return ""; },
+  async goAlbum(item) {
+    const album = item.local
+      ? local.albums.find(a => a.albumKey && a.albumKey === item.albumKey)
+      : await albumOfSong(item);
+    if (!album) throw new Error("couldn't find the album");
+    await open(album);
+    return "";
+  },
+  async goArtist(item) {
+    const artist = item.local
+      ? local.artists.find(a => a.title === (item.albumArtist || item.artist))
+      : await artistOfSong(item);
+    if (!artist) throw new Error("couldn't find the artist");
+    await open(artist);
+    return "";
+  },
   async qplay({ li }) { +li.dataset.i === queuePos() ? await seekTo(0) : await changeTo(+li.dataset.i); return ""; },
   async qtop({ li }) { await moveQueued(li, (n, pos) => pos + 1); return ""; },
   async qup({ li }) { await moveQueued(li, +li.dataset.i - 1); return ""; },
@@ -2919,6 +2974,7 @@ const MENU_ICONS = {
   back: "i-back", qplay: "i-play", qtop: "i-chevron-down", qup: "i-chevron-down",
   qdown: "i-chevron-down", qbottom: "i-chevron-down", qremove: "i-close",
   fetchLyrics: "i-lyrics", deletePlaylist: "i-trash", removeFromPlaylist: "i-close",
+  goAlbum: "i-disc", goArtist: "i-users",
 };
 
 function menuEntries(item) {
@@ -2931,6 +2987,7 @@ function menuEntries(item) {
       const inPlaylist = currentPlaylist && (currentPlaylist.trackIds || []).includes(item.id);
       return [
         ["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
+        ["goAlbum", "Go to Album"], ["goArtist", "Go to Artist"], "-",
         ["playlist", "Add to Playlist…"],
         ...(inPlaylist ? [["removeFromPlaylist", "Remove from this playlist"], "-"] : []),
         ["fetchLyrics", "Fetch lyrics"], "-",
@@ -2948,6 +3005,7 @@ function menuEntries(item) {
   const canAdd = signedIn && !item.lib && ["song", "album", "playlist"].includes(item.kind);
   switch (item.kind) {
     case "song": return [["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
+                         ["goAlbum", "Go to Album"], ["goArtist", "Go to Artist"], "-",
                          canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
     case "album":
     case "playlist": return [["play", "Play"], ["shuffle", "Shuffle"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
