@@ -512,33 +512,31 @@ body.sidebar-collapsed #mini { left: calc(var(--sidebar-w) + 14px); }
 .mini-extra { display: flex; align-items: center; gap: 2px; flex: none; }
 .mini-extra .icon-btn { width: 30px; height: 30px; }
 .mini-extra .icon-btn .icon { width: 16px; height: 16px; }
-.vol-slider { -webkit-appearance: none; appearance: none; width: 82px; height: 18px; background: none; cursor: pointer; }
-.vol-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: rgba(29, 26, 36, .13); }
-.vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; margin-top: -3px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
-.vol-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-faint); }
 
-/* The level on hover: a small glass chip above the mute button, filled in the cover's accent like the seek
-   bar. Read-only; the slider beside it (or the wheel) still does the setting. */
+/* The level: a vertical glass chip above the mute button. It stays open while the pointer is on it (and
+   while dragging), so the bar is the control; the fill and knob match the seek line and the old slider. */
 .vol-anchor { position: relative; display: inline-flex; }
 .vol-pop {
   --vol: 80%;
-  position: absolute; bottom: calc(100% + 10px); left: 50%;
-  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-sm);
-  background: var(--panel-strong); border: 1px solid var(--line); box-shadow: var(--shadow-sm);
-  backdrop-filter: blur(18px) saturate(1.2);
-  opacity: 0; transform: translate(-50%, 4px); pointer-events: none; white-space: nowrap;
+  position: absolute; bottom: calc(100% + 9px); left: 50%;
+  display: flex; flex-direction: column; align-items: center; gap: 7px;
+  width: 38px; padding: 8px 0 9px; border-radius: 13px;
+  background: var(--panel-solid); border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(24px); cursor: pointer; touch-action: none;
+  opacity: 0; transform: translate(-50%, 6px); pointer-events: none;
   transition: opacity .16s, transform .16s var(--ease); z-index: 40;
 }
+.vol-anchor::after { content: ""; position: absolute; left: 50%; transform: translateX(-50%); bottom: 100%; width: 40px; height: 9px; }
 .vol-anchor:hover .vol-pop,
-.vol-anchor:focus-within .vol-pop { opacity: 1; transform: translate(-50%, 0); }
-.vol-pop-track { width: 86px; height: 4px; border-radius: 4px; background: var(--line-strong); overflow: hidden; }
-.vol-pop-fill { display: block; height: 100%; width: var(--vol); border-radius: inherit; background: var(--accent); transition: width .12s linear; }
-.vol-pop-num { font-size: var(--text-xs); font-weight: 750; letter-spacing: .02em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vol-anchor:focus-within .vol-pop,
+.vol-anchor.dragging .vol-pop { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.vol-pop:focus-visible { outline: 2px solid var(--accent-ring); outline-offset: 2px; }
+.vol-pop-num { font-size: var(--text-xs); font-weight: 750; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vol-pop-track { position: relative; width: 6px; height: 96px; border-radius: 99px; background: var(--line-strong); }
+.vol-pop-fill { position: absolute; left: 0; right: 0; bottom: 0; height: var(--vol); border-radius: inherit; background: var(--accent); }
+.vol-pop-knob { position: absolute; left: 50%; bottom: var(--vol); width: 12px; height: 12px; margin: 0 0 -6px -6px;
+  border-radius: 50%; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
 .vol-pop.muted .vol-pop-num { color: var(--ink-3); }
-/* The mini bar's mute button sits near the window edge, so its chip hangs from the right instead of centred. */
-#mini .vol-pop { left: auto; right: 0; transform: translate(0, 4px); }
-#mini .vol-anchor:hover .vol-pop,
-#mini .vol-anchor:focus-within .vol-pop { transform: translate(0, 0); }
 #miniStatusLine {
   position: absolute; left: 20px; right: 20px; bottom: 0; height: 2px; width: 0;
   background: var(--accent); opacity: .45; border-radius: 2px; pointer-events: none; transition: width .12s linear;
@@ -933,7 +931,6 @@ summary { cursor: pointer; }
   .nav-item .count { position: absolute; margin: -22px 0 0 22px; }
   .account-chip { justify-content: center; }
   .mini-meta { width: 130px; }
-  .mini-extra .vol-slider { display: none; }
   .mini-progress { max-width: 180px; }
 }
 @media (max-width: 860px) {

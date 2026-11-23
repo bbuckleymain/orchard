@@ -393,20 +393,20 @@ function paintHearts() {
 }
 
 // ---- volume -----------------------------------------------------------------------------------
-// Volume from the slider, the wheel, the keyboard or the mute button. Muting isn't remembered as the
-// volume, so the next launch doesn't start silent; unmuting goes back to where it was.
+// The level lives here: the vertical bar above each mute button is the control, and the wheel, the keyboard
+// and the mute button all move the same value. Muting isn't remembered as the volume, so the next launch
+// doesn't start silent; unmuting goes back to where it was.
+let volume = 0.8;
 let unmuted = null;
 function setVolume(v, remember = true) {
-  v = Math.round(clamp(v, 0, 1) * 100) / 100;
-  $("vol").value = String(v);
-  $("miniVol").value = String(v);
-  if (music) music.volume = v;
-  localAudio.volume = v;
-  if (v > 0 && remember) { unmuted = null; prefs.volume = v; savePrefs(); }
+  volume = Math.round(clamp(v, 0, 1) * 100) / 100;
+  if (music) music.volume = volume;
+  localAudio.volume = volume;
+  if (volume > 0 && remember) { unmuted = null; prefs.volume = volume; savePrefs(); }
   showVolume();
 }
 function showVolume() {
-  const muted = +$("vol").value === 0;
+  const muted = volume === 0;
   for (const id of ["miniVolumeIcon", "playerVolumeIcon"]) {
     const b = $(id);
     b.classList.toggle("muted", muted);
@@ -415,38 +415,68 @@ function showVolume() {
   }
   paintVolPops();
 }
-// The chip above each mute button reads the same level as the sliders, so muting, the wheel and the keyboard
-// all keep it honest without a second piece of state.
+// The bar above each mute button, in the cover's accent. One value, so nothing can drift out of step.
 function paintVolPops() {
-  const level = Math.round(clamp(+$("vol").value, 0, 1) * 100);
+  const level = Math.round(volume * 100);
   for (const id of ["miniVolPop", "volPop"]) {
     const pop = $(id);
     if (!pop) continue;
     pop.style.setProperty("--vol", level + "%");
     pop.querySelector(".vol-pop-num").textContent = level + "%";
     pop.classList.toggle("muted", level === 0);
+    pop.setAttribute("aria-valuenow", String(level));
+    pop.setAttribute("aria-valuetext", level + "%");
   }
 }
 function toggleMute() {
-  if (+$("vol").value > 0) { unmuted = +$("vol").value; setVolume(0, false); }
+  if (volume > 0) { unmuted = volume; setVolume(0, false); }
   else setVolume(unmuted || prefs.volume || 0.8);
 }
 
-const startVolume = prefs.rememberVolume && prefs.volume != null ? clamp(prefs.volume, 0, 1) : 0.8;
-$("vol").value = String(startVolume);
-$("miniVol").value = String(startVolume);
-localAudio.volume = startVolume;
+volume = prefs.rememberVolume && prefs.volume != null ? clamp(prefs.volume, 0, 1) : 0.8;
+localAudio.volume = volume;
 showVolume();
 
 for (const id of ["miniVolumeIcon", "playerVolumeIcon"]) {
   const b = $(id);
   b.onclick = toggleMute;
-  b.parentElement.addEventListener("wheel", e => {
+  b.parentElement.addEventListener("wheel", e => {     // the wheel works over the button and the open bar
     e.preventDefault();
-    setVolume(+$("vol").value - Math.sign(e.deltaY) * 0.05);
+    setVolume(volume - Math.sign(e.deltaY) * 0.05);
   }, { passive: false });
 }
-for (const id of ["vol", "miniVol"]) $(id).addEventListener("input", e => setVolume(+e.target.value));
+
+// Tap or drag the bar to set the level. Hovering the bar keeps it open (it is inside the same anchor), the
+// bridge in its CSS covers the gap below, and `dragging` holds it open if the pointer strays.
+function volFromPointer(pop, e) {
+  const r = pop.querySelector(".vol-pop-track").getBoundingClientRect();
+  setVolume((r.bottom - e.clientY) / r.height);
+}
+for (const id of ["miniVolPop", "volPop"]) {
+  const pop = $(id), anchor = pop.parentElement;
+  pop.addEventListener("pointerdown", e => {
+    e.preventDefault();
+    pop.focus({ preventScroll: true });
+    pop.setPointerCapture(e.pointerId);
+    anchor.classList.add("dragging");
+    volFromPointer(pop, e);
+  });
+  pop.addEventListener("pointermove", e => { if (pop.hasPointerCapture(e.pointerId)) volFromPointer(pop, e); });
+  const release = e => {
+    try { pop.releasePointerCapture(e.pointerId); } catch {}
+    anchor.classList.remove("dragging");
+  };
+  pop.addEventListener("pointerup", release);
+  pop.addEventListener("pointercancel", release);
+  pop.addEventListener("keydown", e => {
+    const step = e.shiftKey ? 0.1 : 0.05;
+    const handle = fn => { e.preventDefault(); e.stopPropagation(); fn(); };   // don't let the page also nudge
+    if (e.key === "ArrowUp" || e.key === "ArrowRight") handle(() => setVolume(volume + step));
+    else if (e.key === "ArrowDown" || e.key === "ArrowLeft") handle(() => setVolume(volume - step));
+    else if (e.key === "Home") handle(() => setVolume(0));
+    else if (e.key === "End") handle(() => setVolume(1));
+  });
+}
 
 // ---- start MusicKit (the Cider way: web player's developer token + Widevine) --------------------
 document.addEventListener("musickitloaded", start);
@@ -465,13 +495,13 @@ async function start() {
 
   lockQuality();
   music.addEventListener("playbackBitrateDidChange", lockQuality);
-  music.volume = +$("vol").value;
+  music.volume = volume;
   setAutoplay(prefs.autoplay);
 
   music.addEventListener("playbackStateDidChange", onState);
   music.addEventListener("playbackVolumeDidChange", () => {
     report();
-    if (Math.abs(music.volume - +$("vol").value) > 0.005) setVolume(music.volume, false);
+    if (Math.abs(music.volume - volume) > 0.005) setVolume(music.volume, false);
     showVolume();
   });
   setInterval(() => { if (music.isPlaying && !localItem()) report(); }, 5000);   // keeps the position honest
@@ -3480,7 +3510,7 @@ document.addEventListener("keydown", e => {
     case "ArrowUp": case "ArrowDown":
       if (slider || el?.closest?.("#content, #queue, #lyrics, #sheet, #menu")) return;   // let lists scroll
       e.preventDefault();
-      setVolume(+$("vol").value + (key === "ArrowUp" ? 0.05 : -0.05));
+      setVolume(volume + (key === "ArrowUp" ? 0.05 : -0.05));
       break;
   }
 });
@@ -3503,7 +3533,7 @@ function report(extra = {}) {
   glass.mprisState({
     status: it ? (isPlaying() ? "Playing" : "Paused") : "Stopped",
     position: currentTime(),
-    volume: +$("vol").value,
+    volume,
     track: it ? {
       id: it.id,
       title: it.title || "",
