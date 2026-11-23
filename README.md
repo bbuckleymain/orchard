@@ -30,7 +30,9 @@ Local Files has All, Albums, Artists and Songs tabs. Shuffle albums plays every 
 order, each in its own track order.
 
 You can build playlists by hand: **Library → Playlists → New playlist** makes one in the app or, when you are
-signed in, in your Apple Music library. Add or remove songs, albums or artists from any right-click menu.
+signed in, in your Apple Music library. Add songs, albums or artists from any right-click menu, and inside a
+playlist a song's menu offers **Remove from this playlist** (Apple playlists are rebuilt without it, since the
+API can't remove one track).
 
 **Review Playlist…** (right-click a playlist, or its “…” menu) goes through it one song at a time, Tinder
 style: the cover and track on a card, and the song plays as it appears, with play/pause and a seek bar under

@@ -1297,6 +1297,7 @@ function pageHead(page) {
   if (page.newPlaylist) {
     const b = pillBtn("New playlist", "", "i-plus");
     b.onclick = e => {
+      e.stopPropagation();          // the document's click handler closes the menu otherwise
       menuItem = { kind: "new" };
       fillMenu([["mkLocal", "Local playlist…"], music?.isAuthorized && ["mkApple", "Apple Music playlist…"]]);
       placeMenu(e.clientX, e.clientY);
@@ -1360,6 +1361,7 @@ function heroEl(hero) {
     more.title = "More";
     more.setAttribute("aria-label", "More");
     more.onclick = e => {
+      e.stopPropagation();          // the document's click handler closes the menu otherwise
       const entries = menuEntries(hero.item);
       if (!entries.length) return;
       menuItem = hero.item;
@@ -1620,6 +1622,7 @@ function renderPage(page) {
 async function open(item) {
   status("Loading…");
   currentPlaylist = item.local && item.kind === "playlist" ? item.playlist : null;
+  currentPlaylistItem = item.kind === "playlist" ? item : null;
   const job = ++loadJob;
   try {
     let page;
@@ -1651,6 +1654,9 @@ async function open(item) {
 function back() {
   const prev = stack.pop();
   if (!prev) return;
+  const it = prev.page?.hero?.item;
+  currentPlaylistItem = it?.kind === "playlist" ? it : null;
+  currentPlaylist = currentPlaylistItem?.local ? currentPlaylistItem.playlist : null;
   renderPage(prev.page);
   $("content").scrollTop = prev.scroll;
   $("backBtn").hidden = !stack.length;
@@ -1659,6 +1665,7 @@ function back() {
 async function load() {
   if (view !== "search" && !VIEWS[view]) return;
   currentPlaylist = null;
+  currentPlaylistItem = null;
   stack = [];
   $("backBtn").hidden = true;
   const job = ++loadJob, v = view;
@@ -1758,7 +1765,8 @@ const appleFavs = new Set();
 // ---- playlists built by hand (local files) ------------------------------------------------------
 let localPlaylists = (() => { try { return JSON.parse(localStorage.getItem("glass.playlists")) || []; } catch { return []; } })();
 const saveLocalPlaylists = () => { try { localStorage.setItem("glass.playlists", JSON.stringify(localPlaylists)); } catch {} };
-let currentPlaylist = null;
+let currentPlaylist = null;          // the local playlist being shown, for "Remove from this playlist"
+let currentPlaylistItem = null;      // the playlist page being shown, local or Apple
 
 function localPlaylistTracks(pl) {
   return (pl.trackIds || []).map(id => local.tracks.find(t => t.id === id)).filter(Boolean);
@@ -2496,6 +2504,19 @@ async function maybeAutoCreateSuggested() {
   autoSuggestedBusy = false;
 }
 
+// One song out of a playlist page. Local playlists lose the id; Apple playlists are rebuilt without it,
+// because the API has no per-track removal. Returns the item to show afterwards (Apple's id changes).
+async function removeSongFromPlaylist(item, song) {
+  if (item.local) {
+    await removeFromPlaylist(item, song);
+    return item;
+  }
+  const songs = await tracksOf(item);
+  const { id, note } = await applyReviewChanges(item, songs, [song]);
+  if (note) status(note, true);
+  return id === item.id ? item : { ...item, id };
+}
+
 // ---- playlist reviewer ---------------------------------------------------------------------------
 // Right-click a playlist (or use its "…" menu) and go through it a song at a time: keep it or remove it.
 // The decisions live in ui/review.js; this is the card, the transport, the two buttons and the keys.
@@ -3229,13 +3250,13 @@ function menuEntries(item) {
       ["deletePlaylist", "Delete playlist"],
     ];
     if (item.kind === "song") {
-      const inPlaylist = currentPlaylist && (currentPlaylist.trackIds || []).includes(item.id);
+      const inPlaylist = currentPlaylistItem?.local && (currentPlaylistItem.playlist?.trackIds || []).includes(item.id);
       return [
         ["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
         ["goAlbum", "Go to Album"], ["goArtist", "Go to Artist"], "-",
         ["playlist", "Add to Playlist…"],
-        ...(inPlaylist ? [["removeFromPlaylist", "Remove from this playlist"], "-"] : []),
-        ["fetchLyrics", "Fetch lyrics"], "-",
+        ...(inPlaylist ? ["-", ["removeFromPlaylist", "Remove from this playlist"]] : []),
+        "-", ["fetchLyrics", "Fetch lyrics"], "-",
         ["reveal", "Show in Files"], ["removeLocal", "Remove from Library"],
       ];
     }
@@ -3249,9 +3270,14 @@ function menuEntries(item) {
   const signedIn = music?.isAuthorized;
   const canAdd = signedIn && !item.lib && ["song", "album", "playlist"].includes(item.kind);
   switch (item.kind) {
-    case "song": return [["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
-                         ["goAlbum", "Go to Album"], ["goArtist", "Go to Artist"], "-",
-                         canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
+    case "song": {
+      const entries = [["play", "Play"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
+                       ["goAlbum", "Go to Album"], ["goArtist", "Go to Artist"], "-",
+                       canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
+      // Every song on a playlist page is in that playlist, so the removal is offered there.
+      if (currentPlaylistItem && !currentPlaylistItem.local) entries.push("-", ["removeFromPlaylist", "Remove from this playlist"]);
+      return entries;
+    }
     case "album":
     case "playlist": {
       const entries = [["play", "Play"], ["shuffle", "Shuffle"], ["next", "Play Next"], ["later", "Add to Queue"], "-"];
@@ -3378,12 +3404,15 @@ $("menu").addEventListener("click", async e => {
     return;
   }
   if (act === "removeFromPlaylist") {
-    const pl = currentPlaylist;
+    const pl = currentPlaylistItem;
     if (!pl) return;
-    pl.trackIds = (pl.trackIds || []).filter(id => id !== item.id);
-    saveLocalPlaylists();
-    status(`Removed from ${pl.name}.`);
-    try { renderPage(await playlistPage(localPlaylistItem(pl))); } catch {}
+    try {
+      const shown = await removeSongFromPlaylist(pl, item);
+      currentPlaylistItem = shown;
+      currentPlaylist = shown.local ? shown.playlist : null;
+      status(`Removed ${item.title} from ${pl.title}.`);
+      renderPage(await playlistPage(shown));
+    } catch (e) { status("Couldn't remove that song: " + (e?.message || e), true); }
     return;
   }
   if (act === "deletePlaylist") {
