@@ -31,6 +31,9 @@ step — CommonJS everywhere.
 - `local-library.js` is pure Node (no Electron) so it can be tested; it parses FLAC/ID3v2/MP4/WAV by hand with no
   dependencies. Library data lives in Electron `userData` (`local-library.json`, `local-cache.json`,
   `local-lyrics.json`, `artist-photos.json`, `covers/`), not in the repo.
+- `recommendations.js` is pure Node too: Last.fm's API (your top artists, then similar artists and their top
+  albums) and Apple catalogue search. The renderer turns its Apple resources into items with `toItem()`; the
+  Suggested Music playlist is created in the user's Apple Music library through `amp()`.
 - Local lyrics: `main.js` runs the LRCLIB job after a scan and on request, writes `<song>.lrc`, and embeds synced
   words into FLAC `VORBIS_COMMENT`; `lyricsFor()` reads the sidecar first, then the file. The lyrics stage uses
   Deezer artist photos cached in `artist-photos.json`. Hand-built playlists live in `localStorage` under

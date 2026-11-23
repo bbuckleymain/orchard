@@ -35,6 +35,14 @@ any right-click menu. You can add to Apple playlists from the same menu when you
 The five-band equalizer (Flat, Warm, Bright, Vocal, Bass) works on local files only. Web Audio cannot process
 Apple's protected stream. The library stays in Electron's user data directory, and Orchard uploads nothing.
 
+### Suggested
+
+**Suggested** reads your Last.fm listening (or the Last.fm charts, with no username) and asks Last.fm for
+similar artists. A couple of records from each are looked up in the Apple catalogue, and their songs become a
+**Suggested Music** playlist in your Apple Music library. The playlist is replaced when a new day's set is
+built, so it always holds one day's suggestions. With **Auto-create daily** on, it is rebuilt the first time
+Orchard opens each day; the buttons in Settings build it immediately. It needs your own free Last.fm API key.
+
 ### Lyrics
 
 The lyrics panel (`Y` or `L`) reads a `.lrc` next to the file first, then lyrics embedded in the file
@@ -56,9 +64,9 @@ photo, cached after the first play. The current line lights up, clicking seeks, 
 The accent, tints and background come from the current cover and crossfade when the track changes. Two
 themes share that palette: **Glass** (light) and **Night** (dark glass).
 
-There are four destinations: Home, Search, Library and Local Files. Library keeps Albums, Songs, Artists,
-Playlists, Recently Added, Recently Played, Most Played, Favorites and Radios as filters. The icon is a flat
-green apple with a beamed music note.
+There are five destinations: Home, Search, Library, Local Files and Suggested. Library keeps Albums, Songs,
+Artists, Playlists, Recently Added, Recently Played, Most Played, Favorites and Radios as filters. The icon is
+a flat green apple with a beamed music note.
 
 ## Install
 
@@ -135,8 +143,8 @@ Electron's user data directory (`~/.config/Orchard` on Linux):
 
 ## Working on it
 
-- `npm test` runs the parser, queue, lyrics and Last.fm tests with Node's built-in runner; they build their own
-  fixtures and need no network.
+- `npm test` runs the parser, queue, lyrics, Last.fm and recommendations tests with Node's built-in runner; they
+  build their own fixtures and need no network.
 - `node --check <file>` is the only static check. There is no lint or build step for the renderer.
 - Close Orchard before running `./install.sh` again.
 

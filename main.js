@@ -213,33 +213,31 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
   return { total: tracks.length, ...(await lastfm.matchAll(tracks, { token: await token(), storefront })) };
 });
 
-// Last.fm recommendations -> Apple Music.
-// The Last.fm recommendation pages are personalized and may be empty for anonymous users; we still
-// return whatever we find and let the UI explain.
-ipcMain.handle("lastfm-recommended", async () => {
+// Last.fm recommendations -> Apple Music. Your top artists (or the charts, with no username) seed similar
+// artists; a couple of records from each are looked up in the Apple catalogue and their songs become the
+// daily playlist. The matching runs here so the renderer never handles the developer token.
+ipcMain.handle("lastfm-recommended", async (_e, { user } = {}) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const [albums, artists] = await Promise.all([
-      recommendations.fetchRecommendedAlbums(),
-      recommendations.fetchRecommendedArtists(),
-    ]);
-    return { albums, artists };
+    const seeds = await recommendations.topArtists({ user: String(user || "").trim(), key });
+    const artists = await recommendations.similarArtists({ seeds, key });
+    const albums = await recommendations.albumsByArtists({ artists, key });
+    return { seeds, artists, albums };
   } catch (e) {
     return { error: e?.message || String(e) };
   }
 });
 
-ipcMain.handle("lastfm-suggested", async () => {
+ipcMain.handle("lastfm-suggested", async (_e, { user } = {}) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
+    const seeds = await recommendations.topArtists({ user: String(user || "").trim(), key });
+    const artists = await recommendations.similarArtists({ seeds, key });
+    const albums = await recommendations.albumsByArtists({ artists, key });
     const tok = await token();
     const storefront = (loadAccount()?.storefront || "us").toLowerCase();
-    const [albums, artists] = await Promise.all([
-      recommendations.fetchRecommendedAlbums(),
-      recommendations.fetchRecommendedArtists(),
-    ]);
     const [mAlbums, mArtists] = await Promise.all([
       recommendations.matchAlbums(albums, { token: tok, storefront }),
       recommendations.matchArtists(artists, { token: tok, storefront }),

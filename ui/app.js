@@ -474,7 +474,7 @@ async function start() {
   modes();
   music.addEventListener("mediaPlaybackError", e => status("Playback error: " + (e?.message || e?.errorCode || "unknown"), true));
 
-  refreshAccount();
+  refreshAccount();          // also makes today's Suggested Music playlist, if that toggle is on
   setView("home");
   load();
   if (!music.isAuthorized) status("Sign in for Apple Music; your own files are ready.");
@@ -2113,134 +2113,161 @@ $$("#eqBands input[data-eq]").forEach(input => input.addEventListener("input", (
 applyEQ();
 
 // ---- suggested music (daily playlist from Last.fm recommendations) ------------------------------
-const SUGGESTED_PLAYLIST_ID = "suggested-music-daily";
+// Last.fm's API suggests similar artists and a couple of records each; the main process matches them on
+// Apple Music. Here they are turned into ordinary items (toItem) so covers, playback and menus all work,
+// and the songs become a real Apple Music playlist, replaced when a new day's set is built.
+const SUGGESTED_NAME = "Suggested Music";
+let suggestedCache = null;                 // { day, data } so Create doesn't fetch everything twice
 
-function todayKey() {
-  const now = new Date();
-  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-${String(now.getUTCDate()).padStart(2, "0")}`;
+const todayKey = () => new Date().toISOString().slice(0, 10);
+
+async function suggestedData({ fresh = false } = {}) {
+  const day = todayKey();
+  if (!fresh && suggestedCache?.day === day) return suggestedCache.data;
+  const r = await glass.lastfmSuggested({ user: prefs.lastfmUser || "" });
+  if (r?.error) throw new Error(r.error);
+  suggestedCache = { day, data: r };
+  return r;
 }
 
-async function createSuggestedPlaylist() {
-  const signedIn = music?.isAuthorized;
-  if (!signedIn) { status("Sign in to Apple Music first (Account)."); return null; }
-  const pl = { id: SUGGESTED_PLAYLIST_ID, name: "Suggested Music", day: todayKey() };
-  return pl;
-}
-
-async function replacePlaylistTracks(pl, songs) {
-  // Remove any existing localStorage tracks with this id first (yesterday's playlist)
-  localPlaylists = localPlaylists.filter(p => p.id !== SUGGESTED_PLAYLIST_ID);
-  pl.trackIds = songs.map(s => s.id);
-  pl.createdAt = Date.now();
-  localPlaylists.push(pl);
-  saveLocalPlaylists();
-  status(`Suggested Music playlist refreshed: ${songs.length} songs`);
-  return pl;
+function suggestedItems(data) {
+  const albums = (data.albums || []).filter(a => a.found && a.apple).map(a => toItem(a.apple)).filter(Boolean);
+  const artists = (data.artists || []).filter(a => a.found && a.apple).map(a => toItem(a.apple)).filter(Boolean);
+  const songs = (data.tracks || []).map(t => toItem(t)).filter(Boolean);
+  return { albums, artists, songs };
 }
 
 async function suggestedPage() {
-  const signedIn = music?.isAuthorized;
-  if (!signedIn) {
+  if (!music?.isAuthorized) {
     return {
-      title: "Suggested Music",
+      title: SUGGESTED_NAME,
       sub: "Sign in to Apple Music to see recommendations",
       sections: [],
       empty: {
         icon: "i-music", title: "Sign in for Apple Music",
-        text: "Suggested Music needs an Apple Music sign-in and Last.fm API key. You can sign in from the Account button in the top right."
-      }
+        text: "Suggested Music reads your Last.fm listening and finds the artists on Apple Music. Sign in with the Account button first.",
+        actions: [["Connect", "signIn"]],
+      },
     };
   }
   try {
-    const r = await glass.lastfmSuggested();
-    if (r?.error) throw new Error(r.error);
-    const albums = r.albums || [];
-    const artists = r.artists || [];
-    const tracks = r.tracks || [];
+    status("Reading Last.fm and finding the artists on Apple Music…");
+    const { albums, artists, songs } = suggestedItems(await suggestedData());
     const sections = [];
-    if (albums.length) sections.push({ title: "Recommended Albums", items: albums, layout: "covers" });
-    if (artists.length) sections.push({ title: "Recommended Artists", items: artists, layout: "artists" });
-    if (tracks.length) sections.push({ title: "Suggested Tracks", items: tracks, layout: "tracks" });
+    if (artists.length) sections.push({ title: "Artists to try", items: artists, layout: "artists" });
+    if (albums.length) sections.push({ title: "Albums to try", items: albums, layout: "covers" });
+    if (songs.length) sections.push({ title: "In the playlist", items: songs, layout: "tracks" });
+    status("");
     if (!sections.length) {
       return {
-        title: "Suggested Music",
-        sub: "No recommendations found",
+        title: SUGGESTED_NAME,
+        sub: "Nothing matched this time",
         sections: [],
         empty: {
-          icon: "i-music", title: "No recommendations found",
-          text: "Last.fm returned no recommendations. Try playing more music or adjusting your Last.fm API key."
-        }
+          icon: "i-music", title: "Nothing matched on Apple Music",
+          text: "Last.fm answered, but none of it was found in the Apple catalogue. Try again later, or add your Last.fm username in Settings.",
+        },
       };
     }
+    const seed = prefs.lastfmUser ? `from ${prefs.lastfmUser}'s listening` : "from the Last.fm charts";
     return {
-      title: "Suggested Music",
-      sub: `Based on your Last.fm library · ${albums.length} albums, ${artists.length} artists`,
+      title: SUGGESTED_NAME,
+      sub: `Similar artists ${seed} · ${todayKey()}`,
       sections,
+      songs,
     };
   } catch (e) {
+    status("");
+    const noKey = /API key/i.test(e?.message || "");
     return {
-      title: "Suggested Music",
-      sub: "Error loading suggestions",
+      title: SUGGESTED_NAME,
+      sub: "Couldn't read Last.fm",
       sections: [],
       empty: {
-        icon: "i-music", title: "Error",
-        text: e?.message || "Could not load suggested music."
-      }
+        icon: "i-music", title: noKey ? "Last.fm API key needed" : "Couldn't read Last.fm",
+        text: noKey ? "Save your free Last.fm API key in Settings, then come back." : (e?.message || String(e)),
+      },
     };
   }
 }
 
-// Wire up suggested playlist buttons
-$("suggestCreateBtn").onclick = async () => {
-  try {
-    status("Creating Suggested Music playlist…");
-    const r = await glass.lastfmSuggested();
-    if (r?.error) throw new Error(r.error);
-    const tracks = r.tracks || [];
-    if (!tracks.length) throw new Error("No suggested tracks to create playlist from.");
-    const pl = await createSuggestedPlaylist();
-    if (pl) {
-      await replacePlaylistTracks(pl, tracks);
-      $("suggestStatus").textContent = `Created Suggested Music playlist with ${tracks.length} songs.`;
-      if (view === "suggested") load();
-    }
-  } catch (e) {
-    $("suggestStatus").textContent = "Error: " + e.message;
+// Creates the playlist in the user's Apple Music library, then removes yesterday's copy. Apple answers with
+// the new playlist's library id, which is remembered so the next day knows what to delete.
+async function buildSuggestedPlaylist(data) {
+  const songs = (data.tracks || []).map(t => toItem(t)).filter(t => t?.kind === "song" && t.playId);
+  if (!songs.length) throw new Error("No suggested songs were found on Apple Music.");
+  const created = await amp("POST", "/v1/me/library/playlists", {
+    attributes: { name: SUGGESTED_NAME, description: `Last.fm suggestions for ${todayKey()}` },
+  });
+  const id = created?.data?.[0]?.id;
+  if (!id) throw new Error("Apple Music didn't return the new playlist.");
+  for (let i = 0; i < songs.length; i += 100) {
+    await amp("POST", `/v1/me/library/playlists/${id}/tracks`, {
+      data: songs.slice(i, i + 100).map(s => ({ id: s.playId, type: "songs" })),
+    });
   }
+  const previous = prefs.suggestedPlaylist;
+  if (previous?.id && previous.id !== id) {
+    try { await amp("DELETE", `/v1/me/library/playlists/${previous.id}`); } catch {}
+  }
+  prefs.suggestedPlaylist = { id, day: todayKey(), songs: songs.length };
+  savePrefs();
+  return { id, songs };
+}
+
+const suggestNote = text => { $("suggestStatus").textContent = text; };
+
+$("suggestCreateBtn").onclick = async () => {
+  const b = $("suggestCreateBtn");
+  if (!music?.isAuthorized) { suggestNote("Sign in to Apple Music first (Account)."); return; }
+  b.disabled = true;
+  suggestNote("Building the playlist…");
+  try {
+    const { id, songs } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
+    suggestNote(`Created “${SUGGESTED_NAME}” with ${songs.length} song${songs.length === 1 ? "" : "s"} (${id.slice(0, 6)}…).`);
+    if (view === "suggested") load();
+    if (view === "library" && libraryFilter === "playlists") load();
+  } catch (e) {
+    suggestNote("Couldn't create the playlist: " + String(e?.message || e).replace(/^.*Error: /, ""));
+  }
+  b.disabled = false;
 };
 
 $("suggestRefreshBtn").onclick = async () => {
+  if (!music?.isAuthorized) { suggestNote("Sign in to Apple Music first (Account)."); return; }
+  const b = $("suggestRefreshBtn");
+  b.disabled = true;
+  suggestNote("Asking Last.fm again…");
   try {
-    status("Refreshing recommendations…");
-    const r = await glass.lastfmSuggested();
-    if (r?.error) throw new Error(r.error);
-    const albums = r.albums?.length || 0;
-    const artists = r.artists?.length || 0;
-    $("suggestStatus").textContent = `Refreshed. Found ${albums} albums and ${artists} artists.`;
+    const data = await suggestedData({ fresh: true });
+    const { albums, artists } = suggestedItems(data);
+    suggestNote(`${artists.length} artists and ${albums.length} albums matched on Apple Music.`);
     if (view === "suggested") load();
   } catch (e) {
-    $("suggestStatus").textContent = "Error: " + e.message;
+    suggestNote("Couldn't refresh: " + String(e?.message || e).replace(/^.*Error: /, ""));
   }
+  b.disabled = false;
 };
 
-// Auto-create daily playlist if enabled and not done today
+$("autoSuggestedPlaylist").checked = !!prefs.autoSuggestedPlaylist;
+$("autoSuggestedPlaylist").onchange = e => { prefs.autoSuggestedPlaylist = e.target.checked; savePrefs(); };
+
+// Once a day, when the app opens: rebuild the playlist if the toggle is on and today's copy isn't there.
+// Failures stay quiet here; the Settings section reports them when a button is pressed.
+let autoSuggestedBusy = false;
 async function maybeAutoCreateSuggested() {
-  if (!prefs.autoSuggestedPlaylist) return;
-  const today = todayKey();
-  const lastDay = localPlaylists.find(p => p.id === SUGGESTED_PLAYLIST_ID)?.day;
-  if (lastDay === today) return;
+  if (!prefs.autoSuggestedPlaylist || autoSuggestedBusy || !music?.isAuthorized) return;
+  if (prefs.suggestedPlaylist?.day === todayKey()) return;
+  autoSuggestedBusy = true;
   try {
-    const r = await glass.lastfmSuggested();
-    if (r?.error) return;
-    const tracks = r.tracks || [];
-    if (!tracks.length) return;
-    const pl = await createSuggestedPlaylist();
-    if (pl) await replacePlaylistTracks(pl, tracks);
-    $("suggestStatus").textContent = `Auto-created Suggested Music playlist with ${tracks.length} songs.`;
-  } catch { /* ignore */ }
+    const { songs } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
+    suggestNote(`Today's playlist is ready: ${songs.length} songs.`);
+  } catch (e) {
+    suggestNote("Couldn't build today's playlist: " + String(e?.message || e).replace(/^.*Error: /, ""));
+  }
+  autoSuggestedBusy = false;
 }
-// Check on load (after app.js initializes)
-maybeAutoCreateSuggested();
+
 $("rememberVol").checked = prefs.rememberVolume;
 // Up Next can be rearranged by dragging, a song removed with its × (or the right-click menu), and the lot
 // cleared with Clear (click twice). The song that's playing is never touched, so playback carries on.
@@ -3007,6 +3034,7 @@ function refreshAccount() {
     ? `Signed in${music.storefrontCountryCode ? ` (${music.storefrontCountryCode.toUpperCase()})` : ""}. Streaming High Quality, 256 kbps AAC.`
     : "Sign in with your Apple ID to play full songs. Needs an Apple Music subscription.";
   $("accAction").textContent = on ? "Sign out" : "Connect";
+  if (on) maybeAutoCreateSuggested();     // signing in is the other moment today's playlist can be made
 }
 
 $("accAction").onclick = async () => {

@@ -27,6 +27,8 @@ large FLAC collection and an Apple Music subscription, and they do not want two 
 - Lyrics come from Apple Music, Musixmatch (with the user's key), NetEase and LRCLIB. Local files can also
   use a sidecar `.lrc` file next to the audio.
 - The Last.fm tools only run when the user supplies their own API key.
+- Suggested Music is built from Last.fm's similar artists and written to the user's Apple Music library as a
+  playlist. It is replaced when a new day's set is made, and only when the user turns the daily toggle on.
 - Orchard is unofficial and not affiliated with Apple.
 
 ## Surface

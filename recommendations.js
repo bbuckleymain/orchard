@@ -1,197 +1,167 @@
-// Last.fm recommendations -> Apple Music.
-// Fetches Last.fm's recommended albums and artists pages and matches each to the Apple Music catalog.
-// The pages are public but personalized when signed in to Last.fm; without a session they may be empty.
-// Also provides fallback: derive recommendations from user's top tracks (via Last.fm API).
+// Last.fm -> Apple Music, for the Suggested tab. Reads only: Last.fm's API says what you listen to and what
+// sounds like it, then Apple's catalogue is searched for each result. Nothing is written to either service.
 const TIMEOUT = 15000;
-const sleep = ms => new Promise(done => setTimeout(done, ms));
 
-// Last.fm wraps the content in server-rendered markup, but the exact classes rotate over time. We pull
-// the album/artist anchors out of the HTML and read the title off the link text, which is stable.
-function anchors(html) {
-  const out = [];
-  const re = /<a\b[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi;
-  let m;
-  while ((m = re.exec(html))) {
-    const href = m[1] || "", text = m[2] || "";
-    const title = text.replace(/<[^>]*>/g, "").trim();
-    if (!title) continue;
-    if (href.includes("/music/")) out.push({ title, href });
+// "Björk" and "bjork" are the same artist, and "Song (Remastered 2011)" is the same song. Comparing on this
+// form is what stops a recommendation being dropped for a diacritic or a bracketed edition.
+const norm = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/\s*[([][^)\]]*(remaster|deluxe|edition|version|anniversary|mono|stereo)[^)\]]*[)\]]/g, "")
+  .replace(/\s+-\s+.*$/, "")
+  .replace(/[^a-z0-9]+/g, " ").trim();
+
+async function call(method, params, { key, fetchFn = fetch }) {
+  const query = new URLSearchParams({ method, api_key: key, format: "json", ...params });
+  const r = await fetchFn("https://ws.audioscrobbler.com/2.0/?" + query, { signal: AbortSignal.timeout(TIMEOUT) });
+  if (!r.ok) throw new Error(`Last.fm answered ${r.status}`);
+  const j = await r.json();
+  if (j.error) throw new Error("Last.fm: " + j.message);
+  return j;
+}
+
+// What you actually listen to, most played first. Without a username the charts stand in, so the tab has
+// something to show before a username is filled in.
+async function topArtists({ user, key, period = "1month", limit = 8, fetchFn } = {}) {
+  const j = user
+    ? await call("user.gettopartists", { user, period, limit: String(limit) }, { key, fetchFn })
+    : await call("chart.gettopartists", { limit: String(limit) }, { key, fetchFn });
+  const list = (user ? j.topartists?.artist : j.artists?.artist) || [];
+  return list.map(a => ({ name: String(a.name || "").trim(), plays: +a.playcount || 0 })).filter(a => a.name);
+}
+
+// Artists that sound like the ones you play, minus the ones you already play. Last.fm's match score decides
+// the order, so the closest neighbours come first.
+async function similarArtists({ seeds = [], key, perSeed = 5, limit = 12, fetchFn } = {}) {
+  const known = new Set(seeds.map(s => norm(s.name)));
+  const best = new Map();
+  for (const seed of seeds) {
+    let j;
+    try { j = await call("artist.getsimilar", { artist: seed.name, limit: String(perSeed), autocorrect: "1" }, { key, fetchFn }); }
+    catch { continue; }                      // one unknown seed must not sink the whole list
+    for (const a of j.similarartists?.artist || []) {
+      const name = String(a.name || "").trim(), k = norm(name);
+      if (!k || known.has(k)) continue;
+      const match = +a.match || 0;
+      if (!best.has(k) || match > best.get(k).match) best.set(k, { name, match });
+    }
+  }
+  return [...best.values()].sort((a, b) => b.match - a.match).slice(0, limit);
+}
+
+// A couple of records from each suggested artist. Compilations and live records are skipped: they match on
+// Apple Music but are a poor first thing to hear from someone new.
+const NOT_A_RECORD = /\b(greatest hits|best of|essential|anthology|compilation|live at|live in|collection)\b/i;
+
+async function albumsByArtists({ artists = [], key, perArtist = 2, limit = 12, fetchFn } = {}) {
+  const out = [], seen = new Set();
+  for (const a of artists) {
+    let j;
+    try { j = await call("artist.gettopalbums", { artist: a.name, limit: String(perArtist + 4), autocorrect: "1" }, { key, fetchFn }); }
+    catch { continue; }
+    let taken = 0;
+    for (const al of j.topalbums?.album || []) {
+      const title = String(al.name || "").trim(), k = norm(title);
+      if (!k || seen.has(k) || NOT_A_RECORD.test(title)) continue;
+      seen.add(k);
+      out.push({ title, artist: a.name });
+      if (++taken >= perArtist || out.length >= limit) break;
+    }
+    if (out.length >= limit) break;
   }
   return out;
 }
 
-// Albums look like /music/<Artist>/<Album>; artists like /music/<Artist>.
-function parseRecommendedAlbums(html) {
-  const out = [];
-  for (const a of anchors(html)) {
-    if (!a.href.includes("/music/")) continue;
-    const parts = a.href.split("/music/").pop().split("/").map(s => decodeURIComponent(s));
-    const artist = parts.length > 1 ? parts[0] : "";
-    const album = parts.length > 1 ? parts[1] : a.title;
-    if (!album || album === artist) continue;
-    out.push({ title: album, artist });
-  }
-  const seen = new Set();
-  const list = [];
-  for (const a of out) {
-    const k = `${a.title}|${a.artist}`.toLowerCase();
-    if (seen.has(k)) continue;
-    seen.add(k);
-    list.push(a);
-  }
-  return list.slice(0, 20);
-}
-
-function parseRecommendedArtists(html) {
-  const out = [];
-  for (const a of anchors(html)) {
-    if (!a.href.includes("/music/")) continue;
-    const parts = a.href.split("/music/").pop().split("/").map(s => decodeURIComponent(s));
-    const artist = parts[0];
-    if (!artist) continue;
-    if (out.some(o => o.name.toLowerCase() === artist.toLowerCase())) continue;
-    out.push({ name: artist });
-  }
-  return out.slice(0, 20);
-}
-
-// ---- fetch pages --------------------------------------------------------------
-async function fetchRecommendedAlbums({ fetchFn = fetch, url = "https://www.last.fm/music/+recommended/albums" } = {}) {
-  try {
-    const html = await fetchFn(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36" },
-      signal: AbortSignal.timeout(TIMEOUT),
-    }).then(r => r.text());
-    const list = parseRecommendedAlbums(html);
-    return list.length ? list : [];
-  } catch (e) {
-    console.warn("[Orchard] Last.fm recommended albums fetch error:", e.message);
-    return [];
-  }
-}
-
-async function fetchRecommendedArtists({ fetchFn = fetch, url = "https://www.last.fm/music/+recommended/artists" } = {}) {
-  try {
-    const html = await fetchFn(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36" },
-      signal: AbortSignal.timeout(TIMEOUT),
-    }).then(r => r.text());
-    const list = parseRecommendedArtists(html);
-    return list.length ? list : [];
-  } catch (e) {
-    console.warn("[Orchard] Last.fm recommended artists fetch error:", e.message);
-    return [];
-  }
-}
-
-// ---- Apple Music matching ------------------------------------------------------
+// ---- Apple Music matching ------------------------------------------------------------------------
 async function searchApple(type, term, { token, storefront, fetchFn = fetch }) {
   const headers = {
     Authorization: "Bearer " + token,
-    "media-user-token": "",
     Origin: "https://music.apple.com",
     Referer: "https://music.apple.com/",
   };
-  const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/search?` + new URLSearchParams({ term, types: type, limit: "5" });
-  let r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
-  if (r.status === 429) { await sleep(1500); r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) }); }
+  const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/search?` +
+    new URLSearchParams({ term, types: type, limit: "5" });
+  const send = () => fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+  let r = await send();
+  if (r.status === 429) { await new Promise(done => setTimeout(done, 1500)); r = await send(); }
   if (!r.ok) throw new Error(`Apple Music answered ${r.status}`);
   return (await r.json()).results?.[type]?.data || [];
 }
 
+// Searches run a few at a time: serially, twelve lookups feel frozen; all at once, Apple starts answering 429.
+async function mapLimit(list, limit, fn) {
+  const out = new Array(list.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < list.length) { const at = next++; out[at] = await fn(list[at], at); }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, worker));
+  return out;
+}
+
 async function matchAlbums(albums, { token, storefront, fetchFn = fetch } = {}) {
-  const out = [];
-  for (const a of albums) {
+  return mapLimit(albums, 4, async a => {
     try {
       const results = await searchApple("albums", `${a.title} ${a.artist}`, { token, storefront, fetchFn });
-      const match = results.find(r => {
-        const attrs = r.attributes;
-        return attrs.name.toLowerCase() === a.title.toLowerCase() &&
-               attrs.artistName.toLowerCase() === a.artist.toLowerCase();
-      }) || results[0];
-      if (match) {
-        out.push({ ...a, found: true, apple: match.attributes });
-      } else {
-        out.push({ ...a, found: false });
-      }
-    } catch (e) {
-      out.push({ ...a, found: false, error: e.message });
-    }
-  }
-  return out;
+      const title = norm(a.title), artist = norm(a.artist);
+      const exact = results.find(r => norm(r.attributes?.name) === title && norm(r.attributes?.artistName) === artist);
+      const match = exact || results.find(r => norm(r.attributes?.name) === title) || results[0];
+      return match ? { ...a, found: true, apple: match } : { ...a, found: false };
+    } catch (e) { return { ...a, found: false, error: e.message }; }
+  });
 }
 
 async function matchArtists(artists, { token, storefront, fetchFn = fetch } = {}) {
-  const out = [];
-  for (const a of artists) {
+  return mapLimit(artists, 4, async a => {
     try {
       const results = await searchApple("artists", a.name, { token, storefront, fetchFn });
-      const match = results.find(r => r.attributes.name.toLowerCase() === a.name.toLowerCase()) || results[0];
-      if (match) {
-        out.push({ ...a, found: true, apple: match.attributes });
-      } else {
-        out.push({ ...a, found: false });
-      }
-    } catch (e) {
-      out.push({ ...a, found: false, error: e.message });
-    }
-  }
-  return out;
+      const name = norm(a.name);
+      const match = results.find(r => norm(r.attributes?.name) === name) || results[0];
+      return match ? { ...a, found: true, apple: match } : { ...a, found: false };
+    } catch (e) { return { ...a, found: false, error: e.message }; }
+  });
 }
 
-// ---- fetch tracks from matched albums/artists ----------------------------------
+// ---- songs to put in the playlist ---------------------------------------------------------------
+// Apple resources, not bare attributes: the renderer turns these into its own items with toItem().
 async function albumTracks(albumId, { token, storefront, fetchFn = fetch } = {}) {
   const headers = { Authorization: "Bearer " + token, Origin: "https://music.apple.com", Referer: "https://music.apple.com/" };
-  const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/albums/${albumId}?limit=50`;
-  const r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+  const r = await fetchFn(`https://amp-api.music.apple.com/v1/catalog/${storefront}/albums/${albumId}?limit=50`,
+    { headers, signal: AbortSignal.timeout(TIMEOUT) });
   if (!r.ok) return [];
-  const data = await r.json();
-  return (data.data || []).map(t => t.attributes);
+  return (await r.json()).data || [];
 }
 
 async function artistTopTracks(artistId, { token, storefront, fetchFn = fetch } = {}) {
   const headers = { Authorization: "Bearer " + token, Origin: "https://music.apple.com", Referer: "https://music.apple.com/" };
-  const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/artists/${artistId}/top-songs?limit=20`;
-  const r = await fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
+  const r = await fetchFn(`https://amp-api.music.apple.com/v1/catalog/${storefront}/artists/${artistId}/top-songs?limit=20`,
+    { headers, signal: AbortSignal.timeout(TIMEOUT) });
   if (!r.ok) return [];
-  const data = await r.json();
-  return (data.data || []).map(t => t.attributes);
+  return (await r.json()).data || [];
 }
 
-// ---- build track list for the daily playlist ----------------------------------
-async function buildSuggestedTracks({ albums, artists, token, storefront, fetchFn = fetch, maxTracks = 30 } = {}) {
-  const tracks = [];
+// Albums first, then each artist's top songs to fill up; a song that turns up twice is only added once.
+async function buildSuggestedTracks({ albums = [], artists = [], token, storefront, fetchFn = fetch, maxTracks = 30 } = {}) {
+  const out = [], seen = new Set();
+  const add = r => {
+    const id = r?.id;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    out.push(r);
+  };
   for (const a of albums) {
+    if (out.length >= maxTracks) break;
     if (!a.found || !a.apple?.id) continue;
-    try {
-      const tr = await albumTracks(a.apple.id, { token, storefront, fetchFn });
-      for (const t of tr) {
-        tracks.push({ ...t, local: false, id: t.id, playId: t.playParams?.id || "" });
-        if (tracks.length >= maxTracks) break;
-      }
-    } catch {}
-    if (tracks.length >= maxTracks) break;
+    try { for (const t of await albumTracks(a.apple.id, { token, storefront, fetchFn })) { add(t); if (out.length >= maxTracks) break; } } catch {}
   }
   for (const a of artists) {
+    if (out.length >= maxTracks) break;
     if (!a.found || !a.apple?.id) continue;
-    try {
-      const tr = await artistTopTracks(a.apple.id, { token, storefront, fetchFn });
-      for (const t of tr) {
-        if (!tracks.find(existing => existing.playId === t.playParams?.id)) {
-          tracks.push({ ...t, local: false, id: t.id, playId: t.playParams?.id || "" });
-          if (tracks.length >= maxTracks) break;
-        }
-      }
-    } catch {}
-    if (tracks.length >= maxTracks) break;
+    try { for (const t of await artistTopTracks(a.apple.id, { token, storefront, fetchFn })) { add(t); if (out.length >= maxTracks) break; } } catch {}
   }
-  return tracks.slice(0, maxTracks);
+  return out.slice(0, maxTracks);
 }
 
 module.exports = {
-  parseRecommendedAlbums, parseRecommendedArtists,
-  fetchRecommendedAlbums, fetchRecommendedArtists,
-  matchAlbums, matchArtists,
-  albumTracks, artistTopTracks,
-  buildSuggestedTracks,
+  norm,
+  topArtists, similarArtists, albumsByArtists,
+  matchAlbums, matchArtists, albumTracks, artistTopTracks, buildSuggestedTracks,
 };
