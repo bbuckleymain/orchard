@@ -310,9 +310,11 @@ ipcMain.handle("lastfm-recommended", async (_e, query) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
+    // The username is what the genre fallback reads; the connection already knows it, so an empty box in
+    // Settings doesn't drop the tab back to the anonymous charts.
+    const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";
     const artists = await recommendations.recommendArtists({
-      user: String(query?.user || "").trim(), key,
-      secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"),
+      user, key, secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"),
     });
     const albums = await recommendations.albumsByArtists({ artists, key });
     return { artists, albums };
@@ -325,9 +327,9 @@ ipcMain.handle("lastfm-suggested", async (_e, query) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
+    const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";
     const artists = await recommendations.recommendArtists({
-      user: String(query?.user || "").trim(), key,
-      secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"),
+      user, key, secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"),
     });
     const albums = await recommendations.albumsByArtists({ artists, key });
     const tok = await token();

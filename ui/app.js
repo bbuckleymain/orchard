@@ -3236,8 +3236,11 @@ $("lfmConnect").onclick = async () => {
   b.disabled = true;
   $("lfmAuthStatus").textContent = "Waiting for you to allow Orchard on last.fm in your browser…";
   try {
-    paintLastfmAuth(await glass.lastfmConnect());
+    const st = await glass.lastfmConnect();
+    paintLastfmAuth(st);
     suggestedCache = null;
+    // Remember who connected: the genre fallback and the page's subtitle both read the username.
+    if (st?.user) { prefs.lastfmUser = st.user; $("lfmUser").value = st.user; savePrefs(); }
     // The playlist made a moment ago came from the fallback; let today's build again with the real thing.
     prefs.suggestedAttempt = null;
     prefs.suggestedPlaylist = null;
