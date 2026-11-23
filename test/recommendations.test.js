@@ -45,6 +45,116 @@ test("a seed Last.fm can't find doesn't sink the list", async () => {
   assert.deepEqual(out.map(a => a.name), ["Good"]);
 });
 
+test("topTags drops noise tags and keeps the genre ones", async () => {
+  const fetchFn = json({ toptags: { tag: [
+    { name: "post-hardcore", count: 100 }, { name: "seen live", count: 90 },
+    { name: "emo", count: 80 }, { name: "Favorites", count: 70 }, { name: "math rock", count: 60 },
+  ] } });
+  const out = await rec.topTags({ user: "u", key: "k", limit: 2, fetchFn });
+  assert.deepEqual(out.map(t => t.name), ["post-hardcore", "emo"]);
+});
+
+test("artistsByTags weighs the first tag highest and skips artists you already play", async () => {
+  const replies = {
+    "tag=post-hardcore": { topartists: { artist: [{ name: "Saosin" }, { name: "Emery" }, { name: "Known" }] } },
+    "tag=emo": { topartists: { artist: [{ name: "Pool Kids" }, { name: "Saosin" }] } },
+  };
+  const fetchFn = async url => json(replies[Object.keys(replies).find(k => url.includes(k))])();
+  const out = await rec.artistsByTags({
+    tags: [{ name: "post-hardcore" }, { name: "emo" }], key: "k", exclude: ["Known"], fetchFn,
+  });
+  assert.deepEqual(out.map(a => a.name), ["Saosin", "Emery", "Pool Kids"]);
+  assert.equal(out[0].tag, "post-hardcore", "the shared artist is credited to the heavier tag");
+});
+
+test("a tag chart that fails is skipped, not fatal", async () => {
+  const fetchFn = async url => url.includes("tag=bad")
+    ? json({ error: 6, message: "Tag not found" })()
+    : json({ topartists: { artist: [{ name: "Fine" }] } })();
+  const out = await rec.artistsByTags({ tags: [{ name: "bad" }, { name: "good" }], key: "k", fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Fine"]);
+});
+
+test("recommendArtists uses the genres when there is a username", async () => {
+  const seen = [];
+  const fetchFn = async url => {
+    const m = new URL(url).searchParams.get("method");
+    seen.push(m);
+    if (m === "user.gettopartists") return json({ topartists: { artist: [{ name: "Known", playcount: "9" }] } })();
+    if (m === "user.gettoptags") return json({ toptags: { tag: [{ name: "post-hardcore", count: 5 }] } })();
+    return json({ topartists: { artist: [{ name: "Saosin" }, { name: "Known" }] } })();
+  };
+  const out = await rec.recommendArtists({ user: "u", key: "k", fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Saosin"]);
+  assert.ok(seen.includes("tag.gettopartists"), "reads the genre chart");
+  assert.ok(!seen.includes("artist.getsimilar"), "does not fall back to similar artists");
+});
+
+test("recommendArtists falls back to similar artists with no username", async () => {
+  const fetchFn = async url => {
+    const m = new URL(url).searchParams.get("method");
+    if (m === "chart.gettopartists") return json({ artists: { artist: [{ name: "Seed" }] } })();
+    return json({ similarartists: { artist: [artist("Neighbour", 0.8)] } })();
+  };
+  const out = await rec.recommendArtists({ user: "", key: "k", fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Neighbour"]);
+});
+
+test("signedCall signs the sorted parameters plus the secret, without format or api_sig", async () => {
+  const crypto = require("node:crypto");
+  let seen;
+  const fetchFn = async url => { seen = new URL(url); return json({ ok: 1 })(); };
+  await rec.recommendedArtists({ key: "KEY", secret: "SECRET", sk: "SK", user: "u", limit: 3, fetchFn });
+  const q = seen.searchParams;
+  const signed = { api_key: "KEY", limit: "3", method: "user.getRecommendedArtists", sk: "SK", user: "u" };
+  const base = Object.keys(signed).sort().map(k => k + signed[k]).join("");
+  const expected = crypto.createHash("md5").update(base + "SECRET").digest("hex");
+  assert.equal(q.get("api_sig"), expected);
+  assert.equal(q.get("format"), "json");
+  assert.equal(q.get("sk"), "SK");
+});
+
+test("authGetToken and authGetSession read Last.fm's two auth replies", async () => {
+  const token = await rec.authGetToken({ key: "K", secret: "S", fetchFn: json({ token: "tok" }) });
+  assert.deepEqual(token, { token: "tok" });
+  const session = await rec.authGetSession({
+    key: "K", secret: "S", token: "tok",
+    fetchFn: json({ session: { name: "twocan2580", key: "sess" } }),
+  });
+  assert.deepEqual(session, { name: "twocan2580", key: "sess" });
+});
+
+test("recommendedArtists returns Last.fm's own suggestions", async () => {
+  const fetchFn = json({ recommendations: { artist: [{ name: "Saosin" }, { name: "Emery" }, { name: "" }] } });
+  const out = await rec.recommendedArtists({ key: "K", secret: "S", sk: "SK", user: "u", fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Saosin", "Emery"]);
+});
+
+test("recommendArtists prefers the signed suggestions when connected", async () => {
+  const seen = [];
+  const fetchFn = async url => {
+    const m = new URL(url).searchParams.get("method");
+    seen.push(m);
+    if (m === "user.getRecommendedArtists") return json({ recommendations: { artist: [{ name: "Own" }] } })();
+    return json({})();
+  };
+  const out = await rec.recommendArtists({ user: "u", key: "K", secret: "S", sk: "SK", fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Own"]);
+  assert.deepEqual(seen, ["user.getRecommendedArtists"], "no genre charts are read");
+});
+
+test("recommendArtists falls back to the genre charts when the session was revoked", async () => {
+  const fetchFn = async url => {
+    const m = new URL(url).searchParams.get("method");
+    if (m === "user.getRecommendedArtists") return json({ error: 9, message: "Invalid session key" })();
+    if (m === "user.gettopartists") return json({ topartists: { artist: [{ name: "Known" }] } })();
+    if (m === "user.gettoptags") return json({ toptags: { tag: [{ name: "emo", count: 4 }] } })();
+    return json({ topartists: { artist: [{ name: "Pool Kids" }] } })();
+  };
+  const out = await rec.recommendArtists({ user: "u", key: "K", secret: "S", sk: "old", fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Pool Kids"]);
+});
+
 test("albumsByArtists skips compilations and repeats", async () => {
   const replies = {
     "artist=One": { topalbums: { album: [{ name: "Greatest Hits" }, { name: "First" }, { name: "Second" }, { name: "Third" }] } },

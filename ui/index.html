@@ -342,6 +342,15 @@
           <button class="action" id="lfmKeySave">Save</button>
         </div>
         <div class="inline-row">
+          <input id="lfmSecret" type="password" placeholder="Last.fm API secret (for Suggested)" autocomplete="off">
+          <button class="action" id="lfmSecretSave">Save</button>
+        </div>
+        <div class="button-row">
+          <button class="action subtle" id="lfmConnect">Connect Last.fm…</button>
+          <button class="action subtle" id="lfmDisconnect" hidden>Disconnect</button>
+        </div>
+        <div class="muted" id="lfmAuthStatus">Not connected: Suggested uses your top genres. Connect to use Last.fm's own suggestions.</div>
+        <div class="inline-row">
           <input id="lfmUser" placeholder="Last.fm username" autocomplete="off">
           <input id="lfmMin" class="narrow" type="number" min="1" value="10" title="Plays or more">
           <span class="muted">plays or more</span>

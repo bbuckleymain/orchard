@@ -2117,6 +2117,9 @@ applyEQ();
 // Apple Music. Here they are turned into ordinary items (toItem) so covers, playback and menus all work,
 // and the songs become a real Apple Music playlist, replaced when a new day's set is built.
 const SUGGESTED_NAME = "Suggested Music";
+// Bump when the way suggestions are picked changes, so yesterday's playlist isn't kept just because its date
+// matches: the next launch rebuilds it with the new choice.
+const SUGGESTED_VERSION = 2;
 let suggestedCache = null;                 // { day, user, data } so Create doesn't fetch everything twice
 
 // The local date, not UTC: a "daily" playlist should change at the user's midnight, not mid-afternoon.
@@ -2176,10 +2179,10 @@ async function suggestedPage() {
         },
       };
     }
-    const seed = suggestedUser() ? `from ${suggestedUser()}'s listening` : "from the Last.fm charts";
+    const who = suggestedUser();
     return {
       title: SUGGESTED_NAME,
-      sub: `Similar artists ${seed} · ${todayKey()}`,
+      sub: who ? `In the genres ${who} plays · ${todayKey()}` : `From the Last.fm charts · ${todayKey()}`,
       sections,
       songs,
     };
@@ -2235,7 +2238,7 @@ async function buildSuggestedPlaylist(data) {
     throw e;
   }
   await removeOldSuggested(id);
-  prefs.suggestedPlaylist = { id, day: todayKey(), songs: songs.length };
+  prefs.suggestedPlaylist = { id, day: todayKey(), songs: songs.length, version: SUGGESTED_VERSION };
   savePrefs();
   return { id, songs };
 }
@@ -2283,8 +2286,10 @@ let autoSuggestedBusy = false;
 async function maybeAutoCreateSuggested() {
   if (!prefs.autoSuggestedPlaylist || autoSuggestedBusy || !music?.isAuthorized) return;
   const day = todayKey();
-  if (prefs.suggestedPlaylist?.day === day || prefs.suggestedAttempt === day) return;
-  prefs.suggestedAttempt = day;
+  const done = prefs.suggestedPlaylist?.day === day && prefs.suggestedPlaylist?.version === SUGGESTED_VERSION;
+  const tried = prefs.suggestedAttempt?.day === day && prefs.suggestedAttempt?.version === SUGGESTED_VERSION;
+  if (done || tried) return;
+  prefs.suggestedAttempt = { day, version: SUGGESTED_VERSION };
   savePrefs();
   autoSuggestedBusy = true;
   try {
@@ -3191,8 +3196,50 @@ let lfm = null;   // what the last Preview found and still has to add
 const lfmNote = text => { $("lfmStatus").textContent = text; };
 const lfmError = e => lfmNote("Couldn't do that: " + String(e?.message || e).replace(/^.*Error: /, ""));
 glass.lastfmStatus().then(has => { if (has) $("lfmKey").placeholder = "Key saved. Paste a new one to replace it"; });
-$("lfmKeySave").onclick = async () => { const has = await glass.setLastfmKey($("lfmKey").value); $("lfmKey").value = ""; lfmNote(has ? "Last.fm key saved." : "Last.fm key removed."); };
+$("lfmKeySave").onclick = async () => { const has = await glass.setLastfmKey($("lfmKey").value); $("lfmKey").value = ""; lfmNote(has ? "Last.fm key saved." : "Last.fm key removed."); showLastfmAuth(); };
 $("lfmUser").value = prefs.lastfmUser || "";
+
+// Connecting Last.fm (key + secret + the session it gives back) is what lets Suggested read Last.fm's own
+// recommendations instead of approximating them from genre charts. Nothing is sent anywhere else.
+function paintLastfmAuth(st) {
+  const connected = !!st?.user;
+  $("lfmConnect").hidden = connected;
+  $("lfmDisconnect").hidden = !connected;
+  $("lfmConnect").disabled = !st?.hasSecret;
+  $("lfmAuthStatus").textContent = connected
+    ? `Connected as ${st.user}. Suggested uses Last.fm's own recommendations.`
+    : st?.hasSecret
+      ? "Not connected. Press Connect and allow Orchard on last.fm to use its own suggestions."
+      : "Not connected: Suggested uses your top genres. Add the API secret to use Last.fm's own suggestions.";
+}
+async function showLastfmAuth() {
+  try { paintLastfmAuth(await glass.lastfmAuth()); } catch {}
+}
+$("lfmSecretSave").onclick = async () => {
+  const st = await glass.setLastfmSecret($("lfmSecret").value);
+  $("lfmSecret").value = "";
+  paintLastfmAuth(st);
+  $("lfmAuthStatus").textContent = st.hasSecret ? "Secret saved. Press Connect to allow Orchard." : "Secret removed.";
+};
+$("lfmConnect").onclick = async () => {
+  const b = $("lfmConnect");
+  b.disabled = true;
+  $("lfmAuthStatus").textContent = "Waiting for you to allow Orchard on last.fm in your browser…";
+  try {
+    paintLastfmAuth(await glass.lastfmConnect());
+    suggestedCache = null;
+    if (view === "suggested") load();
+  } catch (e) {
+    $("lfmAuthStatus").textContent = String(e?.message || e).replace(/^.*Error: /, "");
+    showLastfmAuth();
+  }
+  b.disabled = false;
+};
+$("lfmDisconnect").onclick = async () => {
+  paintLastfmAuth(await glass.lastfmDisconnect());
+  suggestedCache = null;
+};
+showLastfmAuth();
 
 // Songs you've already favourited are left out, so running this twice adds nothing the second time.
 async function notFavourited(songs) {

@@ -4,6 +4,7 @@
 // See CREDITS.md for the projects this draws on (GlassPlayer, Cider).
 const { app, BrowserWindow, components, ipcMain, session, safeStorage, dialog, shell } = require("electron");
 const http = require("http");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const lyricsSources = require("./lyrics-sources");
@@ -204,6 +205,56 @@ ipcMain.handle("musixmatch-key", (_e, key) => {
 // Most-played Last.fm songs, found on Apple Music. The UI then favourites them with your Apple sign-in.
 ipcMain.handle("lastfm-status", () => !!loadSecret("lastfm"));
 ipcMain.handle("lastfm-key", (_e, key) => { saveSecret("lastfm", String(key || "").trim()); return !!loadSecret("lastfm"); });
+
+// The API secret and the session key exist only so Orchard can ask Last.fm for the same recommendations its
+// own Suggested page shows. They are encrypted like the key and never reach the renderer.
+const lastfmAuth = () => ({
+  hasKey: !!loadSecret("lastfm"),
+  hasSecret: !!loadSecret("lastfm-secret"),
+  user: loadSecret("lastfm-session-name") || "",
+});
+ipcMain.handle("lastfm-auth", lastfmAuth);
+ipcMain.handle("lastfm-secret", (_e, value) => {
+  saveSecret("lastfm-secret", String(value || "").trim());
+  return lastfmAuth();
+});
+ipcMain.handle("lastfm-disconnect", () => {
+  saveSecret("lastfm-session", "");
+  saveSecret("lastfm-session-name", "");
+  return lastfmAuth();
+});
+
+const sleep = ms => new Promise(done => setTimeout(done, ms));
+let connecting = null;
+
+// Desktop auth: ask for a token, send the user to last.fm to allow Orchard, then poll for the session key.
+// The user's browser does the signing in, so no Last.fm password ever passes through the app.
+function lastfmConnect() {
+  const key = loadSecret("lastfm"), secret = loadSecret("lastfm-secret");
+  if (!key || !secret) return Promise.reject(new Error("Save your Last.fm API key and secret first."));
+  if (connecting) return connecting;
+  connecting = (async () => {
+    const { token } = await recommendations.authGetToken({ key, secret });
+    if (!token) throw new Error("Last.fm didn't return a token.");
+    await shell.openExternal(`https://www.last.fm/api/auth/?api_key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`);
+    const deadline = Date.now() + 180000;
+    while (Date.now() < deadline) {
+      await sleep(2500);
+      try {
+        const session = await recommendations.authGetSession({ key, secret, token });
+        if (!session.key) throw new Error("Last.fm returned an empty session.");
+        saveSecret("lastfm-session", session.key);
+        saveSecret("lastfm-session-name", session.name);
+        return lastfmAuth();
+      } catch (e) {
+        if (!/not been authori[sz]ed|unauthori[sz]ed token/i.test(e?.message || "")) throw e;
+      }
+    }
+    throw new Error("Last.fm wasn't authorised in time. Press Connect again when you're ready.");
+  })().finally(() => { connecting = null; });
+  return connecting;
+}
+ipcMain.handle("lastfm-connect", () => lastfmConnect());
 ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
   const key = loadSecret("lastfm");
   user = String(user || "").trim();
@@ -213,17 +264,19 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
   return { total: tracks.length, ...(await lastfm.matchAll(tracks, { token: await token(), storefront })) };
 });
 
-// Last.fm recommendations -> Apple Music. Your top artists (or the charts, with no username) seed similar
-// artists; a couple of records from each are looked up in the Apple catalogue and their songs become the
-// daily playlist. The matching runs here so the renderer never handles the developer token.
+// Last.fm recommendations -> Apple Music. Your most-played genres (or the charts, with no username) decide
+// which artists to suggest; a couple of records from each are looked up in the Apple catalogue and their
+// songs become the daily playlist. The matching runs here so the renderer never handles the developer token.
 ipcMain.handle("lastfm-recommended", async (_e, query) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const seeds = await recommendations.topArtists({ user: String(query?.user || "").trim(), key });
-    const artists = await recommendations.similarArtists({ seeds, key });
+    const artists = await recommendations.recommendArtists({
+      user: String(query?.user || "").trim(), key,
+      secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"),
+    });
     const albums = await recommendations.albumsByArtists({ artists, key });
-    return { seeds, artists, albums };
+    return { artists, albums };
   } catch (e) {
     return { error: e?.message || String(e) };
   }
@@ -233,8 +286,10 @@ ipcMain.handle("lastfm-suggested", async (_e, query) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const seeds = await recommendations.topArtists({ user: String(query?.user || "").trim(), key });
-    const artists = await recommendations.similarArtists({ seeds, key });
+    const artists = await recommendations.recommendArtists({
+      user: String(query?.user || "").trim(), key,
+      secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"),
+    });
     const albums = await recommendations.albumsByArtists({ artists, key });
     const tok = await token();
     const storefront = (loadAccount()?.storefront || "us").toLowerCase();
