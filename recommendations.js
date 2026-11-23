@@ -123,6 +123,30 @@ async function recommendedArtists({ key, secret, sk, user, limit = 12, fetchFn }
     .slice(0, limit);
 }
 
+// ---- the Suggested page's links ------------------------------------------------------------------
+// The page links artists as /music/<Artist> and albums as /music/<Artist>/<Album>. Anything under /music/+
+// is Last.fm's own navigation (+recommended, +free-music-downloads), never a suggestion.
+// Invisible marks turn up in some Last.fm names; they are not a name on their own.
+const cleanName = s => String(s || "").replace(/[\u200B-\u200F\u202A-\u202E\uFEFF]/g, "").trim();
+
+function artistFromHref(href) {
+  const m = /^\/music\/([^/?#]+)/.exec(String(href || ""));
+  if (!m) return "";
+  let name = "";
+  try { name = cleanName(decodeURIComponent(m[1])); } catch { return ""; }
+  if (!name || name.startsWith("+")) return "";     // /music/+recommended and friends are navigation
+  return cleanName(name.replace(/\+/g, " "));
+}
+
+function albumFromHref(href) {
+  const m = /^\/music\/([^/?#]+)\/([^/?#]+)/.exec(String(href || ""));
+  if (!m) return null;
+  let artist = "", title = "";
+  try { artist = cleanName(decodeURIComponent(m[1])); title = cleanName(decodeURIComponent(m[2])); } catch { return null; }
+  if (!artist || !title || artist.startsWith("+") || title.startsWith("+")) return null;
+  return { title: cleanName(title.replace(/\+/g, " ")), artist: cleanName(artist.replace(/\+/g, " ")) };
+}
+
 // What to suggest. Last.fm's own recommendations when the account is connected; otherwise the artists around
 // the ones you play (the same relation its Suggested page shows), topped up from your genre charts when the
 // neighbourhood is thin. `known` is the artists already in your Apple Music library, which are not suggested.
@@ -298,5 +322,6 @@ module.exports = {
   norm,
   topArtists, topTags, artistsByTags, similarArtists, albumsByArtists, recommendArtists,
   sign, authGetToken, authGetSession, recommendedArtists, checkKey,
+  artistFromHref, albumFromHref,
   matchAlbums, matchArtists, albumTracks, artistTopTracks, buildSuggestedTracks,
 };

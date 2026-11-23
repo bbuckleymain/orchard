@@ -31,12 +31,13 @@ step — CommonJS everywhere.
 - `local-library.js` is pure Node (no Electron) so it can be tested; it parses FLAC/ID3v2/MP4/WAV by hand with no
   dependencies. Library data lives in Electron `userData` (`local-library.json`, `local-cache.json`,
   `local-lyrics.json`, `artist-photos.json`, `covers/`), not in the repo.
-- `recommendations.js` is pure Node too: Last.fm's API and Apple catalogue search. With the user's API secret
-  and a session key it calls `user.getRecommendedArtists` (Last.fm's own suggestions); otherwise it walks
-  `artist.getsimilar` from their overall top artists, excluding those and the artists already in their Apple
-  library, and tops up from `tag.gettopartists` for their top tags when the graph is thin. Signing is md5 of
-  the sorted parameters plus the secret. The renderer turns its Apple resources into items with `toItem()`;
-  the Suggested Music playlist is created in the user's Apple Music library through `amp()`.
+- `recommendations.js` is pure Node too: Last.fm's API and Apple catalogue search. The exact list comes from
+  `main.js` reading `last.fm/music/+recommended/{artists,albums}` in a hidden window on the `persist:lastfm`
+  partition (the page is server-rendered and bot-challenged, so it needs a real browser and a sign-in); the
+  helpers `artistFromHref`/`albumFromHref` pull the names out of its links. Without that, `recommendArtists`
+  walks `artist.getsimilar` from the overall top artists (or `user.getRecommendedArtists` with an API session).
+  Signing is md5 of the sorted parameters plus the secret. The renderer turns Apple resources into items with
+  `toItem()`; the playlist is created through `amp()`.
 - Local lyrics: `main.js` runs the LRCLIB job after a scan and on request, writes `<song>.lrc`, and embeds synced
   words into FLAC `VORBIS_COMMENT`; `lyricsFor()` reads the sidecar first, then the file. The lyrics stage uses
   Deezer artist photos cached in `artist-photos.json`. Hand-built playlists live in `localStorage` under

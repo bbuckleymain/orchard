@@ -177,6 +177,17 @@ test("recommendArtists tops up from the genre charts when the neighbours are thi
   assert.deepEqual(out.map(a => a.name), ["Near", "Chart"]);
 });
 
+test("artistFromHref and albumFromHref read the Suggested page's links, skipping Last.fm's own", () => {
+  assert.equal(rec.artistFromHref("/music/Saosin"), "Saosin");
+  assert.equal(rec.artistFromHref("/music/Michael+Cera+Palin"), "Michael Cera Palin");
+  assert.equal(rec.artistFromHref("/music/+recommended/albums"), "", "navigation is not a suggestion");
+  assert.equal(rec.artistFromHref("/music/%E2%80%8E"), "");
+  assert.deepEqual(rec.albumFromHref("/music/Saosin/Saosin"), { title: "Saosin", artist: "Saosin" });
+  assert.deepEqual(rec.albumFromHref("/music/156%2FSilence/Narrative"), { title: "Narrative", artist: "156/Silence" });
+  assert.equal(rec.albumFromHref("/music/Saosin"), null, "an artist link is not an album");
+  assert.equal(rec.albumFromHref("/music/+free-music-downloads/x"), null);
+});
+
 test("albumsByArtists skips compilations and repeats", async () => {
   const replies = {
     "artist=One": { topalbums: { album: [{ name: "Greatest Hits" }, { name: "First" }, { name: "Second" }, { name: "Third" }] } },

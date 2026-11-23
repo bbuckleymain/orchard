@@ -222,6 +222,7 @@ const lastfmAuth = () => ({
   hasKey: !!loadSecret("lastfm"),
   hasSecret: !!loadSecret("lastfm-secret"),
   user: loadSecret("lastfm-session-name") || "",
+  page: !!loadSecret("lastfm-page"),
   pending: !!loadSecret("lastfm-pending-token") && !loadSecret("lastfm-session"),
 });
 ipcMain.handle("lastfm-auth", async () => { await lastfmResume(); return lastfmAuth(); });
@@ -244,6 +245,88 @@ ipcMain.handle("lastfm-disconnect", () => {
 
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 let connecting = null;
+
+// ---- the Suggested page itself, read in a real browser window -----------------------------------
+// Last.fm renders /music/+recommended/artists for the signed-in account, and its public copy is behind a
+// bot challenge, so it is loaded in a window sharing a persistent Last.fm login. That page is the only
+// source that matches Last.fm exactly; the API methods below are fallbacks for when nobody is signed in.
+const LFM_PARTITION = "persist:lastfm";
+const LFM_URL = /^https:\/\/([a-z0-9-]+\.)?last\.fm(\/|$)/i;
+
+function lfmWindow(show) {
+  const w = new BrowserWindow({
+    show, width: 520, height: 760, parent: win, title: "Last.fm", autoHideMenuBar: true, backgroundColor: "#1c1c1c",
+    webPreferences: { partition: LFM_PARTITION, contextIsolation: true },
+  });
+  w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  w.webContents.on("will-navigate", (e, url) => { if (!LFM_URL.test(url)) e.preventDefault(); });
+  return w;
+}
+
+function lastfmLogin() {
+  return new Promise(resolve => {
+    const w = lfmWindow(true);
+    w.loadURL("https://www.last.fm/login");
+    w.on("closed", resolve);
+  });
+}
+
+// The tile's own link carries the cover; the "Similar to …" links further down the tile are plain text, so
+// preferring the link with an image picks the recommendation and not the artists it was derived from.
+async function lfmTiles(w, url, selector) {
+  await w.loadURL(url);
+  return w.webContents.executeJavaScript(`(async () => {
+    const until = Date.now() + 20000;
+    let box = null;
+    while (Date.now() < until) {
+      box = document.querySelector(${JSON.stringify(selector)}) || document.querySelector('[class*="music-recommended"]');
+      if (box) break;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    if (!box) return null;
+    return [...box.querySelectorAll(':scope > li')].map(li => {
+      const links = [...li.querySelectorAll('a[href^="/music/"]')];
+      const own = links.find(a => a.querySelector('img')) || links[0];
+      return own ? own.getAttribute('href') : '';
+    }).filter(Boolean);
+  })()`, true);
+}
+
+async function lfmSuggestedPage() {
+  const w = lfmWindow(false);
+  try {
+    const artistHrefs = await lfmTiles(w, "https://www.last.fm/music/+recommended/artists", ".music-recommended-artists");
+    if (!artistHrefs?.length) { saveSecret("lastfm-page", ""); return null; }
+    const albumHrefs = await lfmTiles(w, "https://www.last.fm/music/+recommended/albums", ".music-recommended-albums");
+    saveSecret("lastfm-page", "1");
+    return {
+      artists: artistHrefs.map(h => recommendations.artistFromHref(h)).filter(Boolean).map(name => ({ name })),
+      albums: (albumHrefs || []).map(h => recommendations.albumFromHref(h)).filter(Boolean),
+    };
+  } catch {
+    return null;
+  } finally { w.destroy(); }
+}
+
+// Only after a Last.fm sign-in has worked once: otherwise every page load would open a hidden window for
+// nothing. A failed read clears the flag, so the next attempt goes straight to the API.
+async function pageSuggestions() {
+  if (!loadSecret("lastfm-page")) return null;
+  const page = await lfmSuggestedPage().catch(() => null);
+  return page?.artists?.length ? page : null;
+}
+
+ipcMain.handle("lastfm-login", async () => {
+  await lastfmLogin();
+  const page = await lfmSuggestedPage().catch(() => null);
+  return { signedIn: !!page?.artists?.length, page: lastfmAuth() };
+});
+ipcMain.handle("lastfm-page", async () => lfmSuggestedPage());
+ipcMain.handle("lastfm-signout", async () => {
+  saveSecret("lastfm-page", "");
+  try { await session.fromPartition(LFM_PARTITION).clearStorageData(); } catch {}
+  return lastfmAuth();
+});
 
 // The token from auth.getToken is kept until it is used, so a late approval on last.fm still completes:
 // opening Settings again (or pressing Connect) picks it up instead of starting over.
@@ -303,15 +386,15 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
   return { total: tracks.length, ...(await lastfm.matchAll(tracks, { token: await token(), storefront })) };
 });
 
-// Last.fm recommendations -> Apple Music. Your most-played genres (or the charts, with no username) decide
-// which artists to suggest; a couple of records from each are looked up in the Apple catalogue and their
-// songs become the daily playlist. The matching runs here so the renderer never handles the developer token.
+// Last.fm recommendations -> Apple Music. The signed-in Suggested page is read first (it is the exact list
+// Last.fm shows); the API methods are the fallback. Matching runs here so the renderer never handles the
+// developer token.
 ipcMain.handle("lastfm-recommended", async (_e, query) => {
   const key = loadSecret("lastfm");
-  if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    // The username is what the genre fallback reads; the connection already knows it, so an empty box in
-    // Settings doesn't drop the tab back to the anonymous charts.
+    const page = await pageSuggestions();
+    if (page) return page;
+    if (!key) return { error: "Sign in to Last.fm, or save your API key in Settings > Last.fm." };
     const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";
     const known = Array.isArray(query?.known) ? query.known.map(String) : [];
     const artists = await recommendations.recommendArtists({
@@ -326,14 +409,20 @@ ipcMain.handle("lastfm-recommended", async (_e, query) => {
 
 ipcMain.handle("lastfm-suggested", async (_e, query) => {
   const key = loadSecret("lastfm");
-  if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";
-    const known = Array.isArray(query?.known) ? query.known.map(String) : [];
-    const artists = await recommendations.recommendArtists({
-      user, key, secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"), known,
-    });
-    const albums = await recommendations.albumsByArtists({ artists, key });
+    let artists = [], albums = [];
+    const page = await pageSuggestions();
+    if (page) ({ artists, albums } = page);
+    else if (key) {
+      const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";
+      const known = Array.isArray(query?.known) ? query.known.map(String) : [];
+      artists = await recommendations.recommendArtists({
+        user, key, secret: loadSecret("lastfm-secret"), sk: loadSecret("lastfm-session"), known,
+      });
+      albums = await recommendations.albumsByArtists({ artists, key });
+    } else {
+      return { error: "Sign in to Last.fm, or save your API key in Settings > Last.fm." };
+    }
     const tok = await token();
     const storefront = (loadAccount()?.storefront || "us").toLowerCase();
     const [mAlbums, mArtists] = await Promise.all([

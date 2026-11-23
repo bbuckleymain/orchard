@@ -3226,6 +3226,10 @@ function paintLastfmAuth(st) {
   $("lfmConnect").hidden = connected;
   $("lfmDisconnect").hidden = !connected;
   $("lfmConnect").disabled = !st?.hasSecret;
+  $("lfmSignOut").hidden = !st?.page;
+  $("lfmPageStatus").textContent = st?.page
+    ? "Signed in: Suggested reads your Last.fm page directly."
+    : "Not signed in: Suggested reads Last.fm through the API below instead.";
   $("lfmAuthStatus").textContent = connected
     ? `Connected as ${st.user}. Suggested uses Last.fm's own recommendations.`
     : st?.pending
@@ -3234,6 +3238,35 @@ function paintLastfmAuth(st) {
         ? "Not connected. Press Connect and allow Orchard on last.fm to use its own suggestions."
         : "Not connected: Suggested uses your top genres. Add the API secret to use Last.fm's own suggestions.";
 }
+
+$("lfmSignIn").onclick = async () => {
+  const b = $("lfmSignIn");
+  b.disabled = true;
+  $("lfmPageStatus").textContent = "Sign in to Last.fm in the window, then close it.";
+  try {
+    const r = await glass.lastfmLogin();
+    suggestedCache = null;
+    if (r?.signedIn) {
+      // The playlist made a moment ago came from the fallback; let today's build again from the page.
+      prefs.suggestedAttempt = null;
+      prefs.suggestedPlaylist = null;
+      savePrefs();
+      maybeAutoCreateSuggested();
+    }
+    paintLastfmAuth(r?.page);
+    if (!r?.signedIn) $("lfmPageStatus").textContent = "Signed in, but the Suggested page didn't load. Try again.";
+    if (view === "suggested") load();
+  } catch (e) {
+    $("lfmPageStatus").textContent = String(e?.message || e).replace(/^.*Error: /, "");
+  }
+  b.disabled = false;
+};
+
+$("lfmSignOut").onclick = async () => {
+  paintLastfmAuth(await glass.lastfmSignOut());
+  suggestedCache = null;
+  if (view === "suggested") load();
+};
 async function showLastfmAuth() {
   try { paintLastfmAuth(await glass.lastfmAuth()); } catch {}
 }

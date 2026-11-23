@@ -337,6 +337,11 @@
       <div class="card">
         <div>Favourite your most-played Last.fm songs</div>
         <div class="muted">Needs a free Last.fm API key, stored encrypted, and an Apple Music sign-in. Nothing is added until you press Add.</div>
+        <div class="button-row">
+          <button class="action" id="lfmSignIn">Sign in to Last.fm…</button>
+          <button class="action subtle" id="lfmSignOut" hidden>Sign out of Last.fm</button>
+        </div>
+        <div class="muted" id="lfmPageStatus">Not signed in: Suggested reads Last.fm through the API below instead.</div>
         <div class="inline-row">
           <input id="lfmKey" type="password" placeholder="Last.fm API key" autocomplete="off">
           <button class="action" id="lfmKeySave">Save</button>
