@@ -262,9 +262,11 @@ async function matchArtists(artists, { token, storefront, fetchFn = fetch } = {}
 
 // ---- songs to put in the playlist ---------------------------------------------------------------
 // Apple resources, not bare attributes: the renderer turns these into its own items with toItem().
+// The album's own resource is not a track, so /tracks is the endpoint; an artist's top songs live under
+// /view/top-songs (the same paths the artist and album pages use).
 async function albumTracks(albumId, { token, storefront, fetchFn = fetch } = {}) {
   const headers = { Authorization: "Bearer " + token, Origin: "https://music.apple.com", Referer: "https://music.apple.com/" };
-  const r = await fetchFn(`https://amp-api.music.apple.com/v1/catalog/${storefront}/albums/${albumId}?limit=50`,
+  const r = await fetchFn(`https://amp-api.music.apple.com/v1/catalog/${encodeURIComponent(storefront)}/albums/${encodeURIComponent(albumId)}/tracks?limit=100`,
     { headers, signal: AbortSignal.timeout(TIMEOUT) });
   if (!r.ok) return [];
   return (await r.json()).data || [];
@@ -272,7 +274,7 @@ async function albumTracks(albumId, { token, storefront, fetchFn = fetch } = {})
 
 async function artistTopTracks(artistId, { token, storefront, fetchFn = fetch } = {}) {
   const headers = { Authorization: "Bearer " + token, Origin: "https://music.apple.com", Referer: "https://music.apple.com/" };
-  const r = await fetchFn(`https://amp-api.music.apple.com/v1/catalog/${storefront}/artists/${artistId}/top-songs?limit=20`,
+  const r = await fetchFn(`https://amp-api.music.apple.com/v1/catalog/${encodeURIComponent(storefront)}/artists/${encodeURIComponent(artistId)}/view/top-songs?limit=20`,
     { headers, signal: AbortSignal.timeout(TIMEOUT) });
   if (!r.ok) return [];
   return (await r.json()).data || [];
@@ -285,6 +287,9 @@ async function buildSuggestedTracks({ albums = [], artists = [], token, storefro
   const add = r => {
     const id = r?.id;
     if (!id || seen.has(id)) return false;
+    // An album's own resource is not a track; only streamable songs go in the playlist.
+    if (r.type && r.type !== "songs") return false;
+    if (!r.attributes?.playParams) return false;
     seen.add(id);
     out.push(r);
     return true;

@@ -188,6 +188,23 @@ test("artistFromHref and albumFromHref read the Suggested page's links, skipping
   assert.equal(rec.albumFromHref("/music/+free-music-downloads/x"), null);
 });
 
+test("albumTracks and artistTopTracks ask Apple for songs, not for the album or artist itself", async () => {
+  const urls = [];
+  const fetchFn = async url => { urls.push(url); return json({ data: [] })(); };
+  await rec.albumTracks("123", { token: "t", storefront: "us", fetchFn });
+  await rec.artistTopTracks("456", { token: "t", storefront: "us", fetchFn });
+  assert.match(urls[0], /\/v1\/catalog\/us\/albums\/123\/tracks\?/);
+  assert.match(urls[1], /\/v1\/catalog\/us\/artists\/456\/view\/top-songs\?/);
+});
+
+test("buildSuggestedTracks ignores anything that isn't a streamable song", async () => {
+  const song = id => ({ id, type: "songs", attributes: { name: id, playParams: { id } } });
+  const album = { id: "alb", type: "albums", attributes: { name: "An album" } };
+  const fetchFn = async url => json({ data: url.includes("/albums/") ? [album, song("s1")] : [] })();
+  const out = await rec.buildSuggestedTracks({ albums: [{ found: true, apple: { id: "alb" } }], token: "t", storefront: "us", fetchFn });
+  assert.deepEqual(out.map(t => t.id), ["s1"]);
+});
+
 test("albumsByArtists skips compilations and repeats", async () => {
   const replies = {
     "artist=One": { topalbums: { album: [{ name: "Greatest Hits" }, { name: "First" }, { name: "Second" }, { name: "Third" }] } },
