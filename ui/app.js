@@ -3198,7 +3198,13 @@ let lfm = null;   // what the last Preview found and still has to add
 const lfmNote = text => { $("lfmStatus").textContent = text; };
 const lfmError = e => lfmNote("Couldn't do that: " + String(e?.message || e).replace(/^.*Error: /, ""));
 glass.lastfmStatus().then(has => { if (has) $("lfmKey").placeholder = "Key saved. Paste a new one to replace it"; });
-$("lfmKeySave").onclick = async () => { const has = await glass.setLastfmKey($("lfmKey").value); $("lfmKey").value = ""; lfmNote(has ? "Last.fm key saved." : "Last.fm key removed."); showLastfmAuth(); };
+$("lfmKeySave").onclick = async () => {
+  const r = await glass.setLastfmKey($("lfmKey").value);
+  if (r?.error) { lfmNote("That key didn't work: " + r.error); return; }
+  $("lfmKey").value = "";
+  lfmNote(r?.has ? "Last.fm key saved." : "Last.fm key removed.");
+  showLastfmAuth();
+};
 $("lfmUser").value = prefs.lastfmUser || "";
 
 // Connecting Last.fm (key + secret + the session it gives back) is what lets Suggested read Last.fm's own
@@ -3240,7 +3246,10 @@ $("lfmConnect").onclick = async () => {
     if (view === "suggested") load();
   } catch (e) {
     // Keep the reason on screen: repainting the status here would replace it with "Not connected".
-    $("lfmAuthStatus").textContent = String(e?.message || e).replace(/^.*Error: /, "");
+    const msg = String(e?.message || e).replace(/^.*Error: /, "");
+    $("lfmAuthStatus").textContent = /signature/i.test(msg)
+      ? msg + " — check that the API secret is the one for this API key."
+      : msg;
   }
   b.disabled = false;
 };

@@ -11,13 +11,32 @@ const norm = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u03
   .replace(/\s+-\s+.*$/, "")
   .replace(/[^a-z0-9]+/g, " ").trim();
 
+// Last.fm puts the reason in the body even when the status is a 403 ("Invalid API key"), which is far more
+// useful than the number alone, so read the JSON first and only fall back to the status.
+async function reply(r) {
+  let j = null;
+  try { j = await r.json(); } catch {}
+  if (j?.error) throw new Error("Last.fm: " + j.message);
+  if (!r.ok) throw new Error(`Last.fm answered ${r.status}`);
+  return j;
+}
+
 async function call(method, params, { key, fetchFn = fetch }) {
   const query = new URLSearchParams({ method, api_key: key, format: "json", ...params });
   const r = await fetchFn("https://ws.audioscrobbler.com/2.0/?" + query, { signal: AbortSignal.timeout(TIMEOUT) });
-  if (!r.ok) throw new Error(`Last.fm answered ${r.status}`);
-  const j = await r.json();
-  if (j.error) throw new Error("Last.fm: " + j.message);
-  return j;
+  return reply(r);
+}
+
+// Whether a key is usable. Only a key Last.fm actually rejects counts as bad: being offline must not stop
+// the user saving a key they know is right.
+async function checkKey({ key, fetchFn = fetch } = {}) {
+  try {
+    await call("chart.gettopartists", { limit: "1" }, { key, fetchFn });
+    return "";
+  } catch (e) {
+    const m = String(e?.message || "");
+    return /invalid api key|invalid api_key|suspended|access denied/i.test(m) ? m.replace(/^Last\.fm: /, "") : "";
+  }
 }
 
 // What you actually listen to, most played first. Without a username the charts stand in, so the tab has
@@ -78,10 +97,7 @@ async function signedCall(method, params, { key, secret, sk, fetchFn = fetch }) 
   const signed = { api_key: key, method, ...params, ...(sk ? { sk } : {}) };
   const query = new URLSearchParams({ ...signed, api_sig: sign(signed, secret), format: "json" });
   const r = await fetchFn("https://ws.audioscrobbler.com/2.0/?" + query, { signal: AbortSignal.timeout(TIMEOUT) });
-  if (!r.ok) throw new Error(`Last.fm answered ${r.status}`);
-  const j = await r.json();
-  if (j.error) throw new Error("Last.fm: " + j.message);
-  return j;
+  return reply(r);
 }
 
 // Step one of the desktop auth flow: a token to send the user to last.fm with.
@@ -276,6 +292,6 @@ async function buildSuggestedTracks({ albums = [], artists = [], token, storefro
 module.exports = {
   norm,
   topArtists, topTags, artistsByTags, similarArtists, albumsByArtists, recommendArtists,
-  sign, authGetToken, authGetSession, recommendedArtists,
+  sign, authGetToken, authGetSession, recommendedArtists, checkKey,
   matchAlbums, matchArtists, albumTracks, artistTopTracks, buildSuggestedTracks,
 };

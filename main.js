@@ -204,7 +204,17 @@ ipcMain.handle("musixmatch-key", (_e, key) => {
 
 // Most-played Last.fm songs, found on Apple Music. The UI then favourites them with your Apple sign-in.
 ipcMain.handle("lastfm-status", () => !!loadSecret("lastfm"));
-ipcMain.handle("lastfm-key", (_e, key) => { saveSecret("lastfm", String(key || "").trim()); return !!loadSecret("lastfm"); });
+// A key is checked before it replaces a working one: pasting the API secret into the key box is an easy
+// mistake, and Last.fm's answer to it is a 403 that used to look like a network fault.
+ipcMain.handle("lastfm-key", async (_e, key) => {
+  const value = String(key || "").trim();
+  if (value) {
+    const bad = await recommendations.checkKey({ key: value });
+    if (bad) return { has: !!loadSecret("lastfm"), error: bad };
+  }
+  saveSecret("lastfm", value);
+  return { has: !!loadSecret("lastfm"), error: "" };
+});
 
 // The API secret and the session key exist only so Orchard can ask Last.fm for the same recommendations its
 // own Suggested page shows. They are encrypted like the key and never reach the renderer.

@@ -26,6 +26,19 @@ test("a Last.fm error becomes an Error", async () => {
   await assert.rejects(rec.topArtists({ user: "u", key: "k", fetchFn: json({ error: 6, message: "User not found" }) }), /User not found/);
 });
 
+test("the reason in a 403 body is reported, not just the status", async () => {
+  const fetchFn = async () => ({ ok: false, status: 403, json: async () => ({ error: 10, message: "Invalid API key - You must be granted a valid key by last.fm" }) });
+  await assert.rejects(rec.topArtists({ user: "u", key: "bad", fetchFn }), /Invalid API key/);
+});
+
+test("checkKey reports a rejected key and stays quiet about a good or unreachable one", async () => {
+  const rejected = async () => ({ ok: false, status: 403, json: async () => ({ error: 10, message: "Invalid API key - You must be granted a valid key by last.fm" }) });
+  assert.match(await rec.checkKey({ key: "bad", fetchFn: rejected }), /Invalid API key/);
+  assert.equal(await rec.checkKey({ key: "ok", fetchFn: json({ artists: { artist: [] } }) }), "");
+  const offline = async () => { throw new Error("getaddrinfo ENOTFOUND"); };
+  assert.equal(await rec.checkKey({ key: "ok", fetchFn: offline }), "", "being offline is not a bad key");
+});
+
 test("similarArtists drops the seeds and keeps the best match for a repeat", async () => {
   const replies = {
     "artist=A&": { similarartists: { artist: [artist("X", 0.9), artist("B", 0.8), artist("Y", 0.4)] } },
