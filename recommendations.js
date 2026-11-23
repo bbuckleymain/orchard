@@ -123,38 +123,43 @@ async function recommendedArtists({ key, secret, sk, user, limit = 12, fetchFn }
     .slice(0, limit);
 }
 
-// What to suggest: Last.fm's own recommendations when the user has connected their account, then the genre
-// charts, then artists near the charts with no username at all.
-async function recommendArtists({ user, key, secret, sk, limit = 12, fetchFn } = {}) {
+// What to suggest. Last.fm's own recommendations when the account is connected; otherwise the artists around
+// the ones you play (the same relation its Suggested page shows), topped up from your genre charts when the
+// neighbourhood is thin. `known` is the artists already in your Apple Music library, which are not suggested.
+async function recommendArtists({ user, key, secret, sk, known = [], limit = 12, fetchFn } = {}) {
   if (secret && sk) {
     try {
       const own = await recommendedArtists({ key, secret, sk, user, limit, fetchFn });
       if (own.length) return own;
     } catch { /* not connected any more, or the token was revoked: fall back below */ }
   }
-  const seeds = await topArtists({ user, key, limit: user ? 50 : 8, fetchFn });
-  if (!user) return similarArtists({ seeds, key, limit, fetchFn });
+  const seeds = await topArtists({ user, key, period: "overall", limit: user ? 20 : 8, fetchFn });
+  const near = await similarArtists({ seeds, key, perSeed: 8, limit, exclude: known, fetchFn });
+  if (near.length >= Math.min(6, limit) || !user) return near;
+  // Too few neighbours: top the list up from the charts for the genres this profile listens to.
   const tags = await topTags({ user, key, fetchFn });
-  if (!tags.length) return similarArtists({ seeds, key, limit, fetchFn });
-  return artistsByTags({ tags, key, exclude: seeds.slice(0, 10).map(s => s.name), limit, fetchFn });
+  if (!tags.length) return near;
+  const taken = [...seeds.map(s => s.name), ...known, ...near.map(a => a.name)];
+  const extra = await artistsByTags({ tags, key, exclude: taken, limit: limit - near.length, fetchFn });
+  return [...near, ...extra];
 }
 
-// Artists that sound like the ones you play, minus the ones you already play. Last.fm's match score decides
-// the order, so the closest neighbours come first.
-async function similarArtists({ seeds = [], key, perSeed = 5, limit = 12, fetchFn } = {}) {
-  const known = new Set(seeds.map(s => norm(s.name)));
+// Artists that sound like the ones you play, minus the ones you already play or already have. Last.fm's own
+// Suggested page is this same relation: each card there is captioned "Similar to <the artists you know>".
+async function similarArtists({ seeds = [], key, perSeed = 5, limit = 12, exclude = [], fetchFn } = {}) {
+  const skip = new Set([...seeds.map(s => norm(s.name)), ...exclude.map(norm)]);
   const best = new Map();
-  for (const seed of seeds) {
+  await mapLimit(seeds, 4, async seed => {
     let j;
     try { j = await call("artist.getsimilar", { artist: seed.name, limit: String(perSeed), autocorrect: "1" }, { key, fetchFn }); }
-    catch { continue; }                      // one unknown seed must not sink the whole list
+    catch { return; }                        // one unknown seed must not sink the whole list
     for (const a of j.similarartists?.artist || []) {
       const name = String(a.name || "").trim(), k = norm(name);
-      if (!k || known.has(k)) continue;
+      if (!k || skip.has(k)) continue;
       const match = +a.match || 0;
       if (!best.has(k) || match > best.get(k).match) best.set(k, { name, match });
     }
-  }
+  });
   return [...best.values()].sort((a, b) => b.match - a.match).slice(0, limit);
 }
 

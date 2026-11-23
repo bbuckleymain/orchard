@@ -45,8 +45,8 @@ test("similarArtists drops the seeds and keeps the best match for a repeat", asy
     "artist=B&": { similarartists: { artist: [artist("X", 0.5), artist("Z", 0.7)] } },
   };
   const fetchFn = async url => json(replies[Object.keys(replies).find(k => url.includes(k))])();
-  const out = await rec.similarArtists({ seeds: [{ name: "A" }, { name: "B" }], key: "k", fetchFn });
-  assert.deepEqual(out.map(a => a.name), ["X", "Z", "Y"]);
+  const out = await rec.similarArtists({ seeds: [{ name: "A" }, { name: "B" }], key: "k", exclude: ["Y"], fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["X", "Z"]);
   assert.equal(out[0].match, 0.9, "the higher of X's two scores wins");
 });
 
@@ -88,19 +88,27 @@ test("a tag chart that fails is skipped, not fatal", async () => {
   assert.deepEqual(out.map(a => a.name), ["Fine"]);
 });
 
-test("recommendArtists uses the genres when there is a username", async () => {
+test("recommendArtists uses the neighbours of the artists you play, minus your library", async () => {
   const seen = [];
   const fetchFn = async url => {
-    const m = new URL(url).searchParams.get("method");
+    const q = new URL(url).searchParams;
+    const m = q.get("method");
     seen.push(m);
-    if (m === "user.gettopartists") return json({ topartists: { artist: [{ name: "Known", playcount: "9" }] } })();
-    if (m === "user.gettoptags") return json({ toptags: { tag: [{ name: "post-hardcore", count: 5 }] } })();
-    return json({ topartists: { artist: [{ name: "Saosin" }, { name: "Known" }] } })();
+    if (m === "user.gettopartists") return json({ topartists: { artist: [{ name: "UnderOath" }, { name: "Origami Angel" }] } })();
+    if (m === "artist.getsimilar") {
+      const who = q.get("artist");
+      if (who === "UnderOath") return json({ similarartists: { artist: [
+        { name: "Saosin", match: "0.9" }, { name: "Emery", match: "0.8" }, { name: "Origami Angel", match: "0.7" },
+      ] } })();
+      return json({ similarartists: { artist: [{ name: "Pool Kids", match: "0.85" }, { name: "Saosin", match: "0.6" }] } })();
+    }
+    if (m === "user.gettoptags") return json({ toptags: { tag: [] } })();
+    return json({});
   };
-  const out = await rec.recommendArtists({ user: "u", key: "k", fetchFn });
-  assert.deepEqual(out.map(a => a.name), ["Saosin"]);
-  assert.ok(seen.includes("tag.gettopartists"), "reads the genre chart");
-  assert.ok(!seen.includes("artist.getsimilar"), "does not fall back to similar artists");
+  const out = await rec.recommendArtists({ user: "u", key: "k", known: ["Emery"], fetchFn });
+  assert.deepEqual(out.map(a => a.name), ["Saosin", "Pool Kids"]);
+  assert.ok(seen.includes("artist.getsimilar"), "walks the similar-artist graph");
+  assert.ok(!seen.includes("tag.gettopartists"), "no tag charts when the neighbours are enough");
 });
 
 test("recommendArtists falls back to similar artists with no username", async () => {
@@ -156,16 +164,17 @@ test("recommendArtists prefers the signed suggestions when connected", async () 
   assert.deepEqual(seen, ["user.getRecommendedArtists"], "no genre charts are read");
 });
 
-test("recommendArtists falls back to the genre charts when the session was revoked", async () => {
+test("recommendArtists tops up from the genre charts when the neighbours are thin", async () => {
   const fetchFn = async url => {
     const m = new URL(url).searchParams.get("method");
     if (m === "user.getRecommendedArtists") return json({ error: 9, message: "Invalid session key" })();
     if (m === "user.gettopartists") return json({ topartists: { artist: [{ name: "Known" }] } })();
+    if (m === "artist.getsimilar") return json({ similarartists: { artist: [{ name: "Near", match: "0.5" }] } })();
     if (m === "user.gettoptags") return json({ toptags: { tag: [{ name: "emo", count: 4 }] } })();
-    return json({ topartists: { artist: [{ name: "Pool Kids" }] } })();
+    return json({ topartists: { artist: [{ name: "Chart" }] } })();
   };
   const out = await rec.recommendArtists({ user: "u", key: "K", secret: "S", sk: "old", fetchFn });
-  assert.deepEqual(out.map(a => a.name), ["Pool Kids"]);
+  assert.deepEqual(out.map(a => a.name), ["Near", "Chart"]);
 });
 
 test("albumsByArtists skips compilations and repeats", async () => {

@@ -1971,6 +1971,7 @@ const ACTIONS = {
     if (item.local) return "";
     const id = item.kind === "song" ? item.playId : item.id;
     await amp("POST", `/v1/me/library?ids%5B${item.kind}s%5D=${encodeURIComponent(id)}`);
+    libraryArtists = null;                     // suggestions shouldn't offer what was just added
     return `Added to your library: ${item.title}`;
   },
   async open(item) { await open(item); return ""; },
@@ -2131,11 +2132,22 @@ const todayKey = () => {
 // What is typed in Settings wins over what was saved last time, so Refresh after editing the username uses it.
 const suggestedUser = () => ($("lfmUser").value || "").trim() || prefs.lastfmUser || "";
 
+// Artists already in the Apple library, so Last.fm's suggestions don't include what you already have. Read
+// once per session; adding something to the library clears it.
+let libraryArtists = null;
+async function knownArtists() {
+  if (libraryArtists) return libraryArtists;
+  try { libraryArtists = (await libraryList("artists")).map(a => a.title).filter(Boolean); }
+  catch { libraryArtists = []; }
+  return libraryArtists;
+}
+
 async function suggestedData({ fresh = false } = {}) {
   const day = todayKey(), user = suggestedUser();
   if (!fresh && suggestedCache?.day === day && suggestedCache.user === user) return suggestedCache.data;
   await glass.lastfmAuth().catch(() => null);   // finishes a Last.fm approval that arrived late
-  const r = await glass.lastfmSuggested({ user });
+  const known = await knownArtists();
+  const r = await glass.lastfmSuggested({ user, known });
   if (r?.error) throw new Error(r.error);
   suggestedCache = { day, user, data: r };
   return r;
@@ -2183,7 +2195,7 @@ async function suggestedPage() {
     const who = suggestedUser();
     return {
       title: SUGGESTED_NAME,
-      sub: who ? `In the genres ${who} plays · ${todayKey()}` : `From the Last.fm charts · ${todayKey()}`,
+      sub: who ? `Artists near the ones ${who} plays · ${todayKey()}` : `From the Last.fm charts · ${todayKey()}`,
       sections,
       songs,
     };

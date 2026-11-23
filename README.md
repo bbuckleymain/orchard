@@ -39,8 +39,9 @@ Apple's protected stream. The library stays in Electron's user data directory, a
 
 **Suggested** reads your Last.fm listening. With the API key **and secret** saved, press **Connect Last.fm**
 once: Orchard asks Last.fm for the same recommendations its own Suggested page shows. Without connecting, it
-falls back to the artists topping the genres you listen to most (or the Last.fm charts with no username). A
-couple of records from each suggestion are looked up in the Apple catalogue, and their songs become a
+walks Last.fm's similar-artist graph from the artists you play most (topped up from your genre charts when that
+is thin), leaving out anything already in your Apple Music library — the same relation your Last.fm page
+shows. A couple of records from each suggestion are looked up in the Apple catalogue, and their songs become a
 **Suggested Music** playlist in your Apple Music library. The playlist is replaced when a new day's set is
 built, so it always holds one day's suggestions. With **Auto-create daily** on, it is rebuilt the first time
 Orchard opens each day; the buttons in Settings build it immediately. It needs your own free Last.fm API key.

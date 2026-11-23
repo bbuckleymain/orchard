@@ -29,9 +29,10 @@ large FLAC collection and an Apple Music subscription, and they do not want two 
 - The Last.fm tools only run when the user supplies their own API key. Connecting the account (key, secret and
   a session key) is optional and only makes Suggested read Last.fm's own recommendations; the key and secret
   are stored encrypted and never leave the main process.
-- Suggested Music is built from those Last.fm recommendations (or, without a connection, the genres in the
-  user's profile) and written to the user's Apple Music library as a playlist. It is replaced when a new day's
-  set is made, and only when the user turns the daily toggle on.
+- Suggested Music is built from Last.fm's recommendations — its own when the account is connected, otherwise
+  the similar-artist graph around what the user plays, minus their library — and written to the user's Apple
+  Music library as a playlist. It is replaced when a new day's set is made, and only when the user turns the
+  daily toggle on.
 - Orchard is unofficial and not affiliated with Apple.
 
 ## Surface
