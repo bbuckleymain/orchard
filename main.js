@@ -212,20 +212,46 @@ const lastfmAuth = () => ({
   hasKey: !!loadSecret("lastfm"),
   hasSecret: !!loadSecret("lastfm-secret"),
   user: loadSecret("lastfm-session-name") || "",
+  pending: !!loadSecret("lastfm-pending-token") && !loadSecret("lastfm-session"),
 });
-ipcMain.handle("lastfm-auth", lastfmAuth);
+ipcMain.handle("lastfm-auth", async () => { await lastfmResume(); return lastfmAuth(); });
 ipcMain.handle("lastfm-secret", (_e, value) => {
-  saveSecret("lastfm-secret", String(value || "").trim());
+  const next = String(value || "").trim();
+  if (next !== loadSecret("lastfm-secret")) {          // a new secret invalidates the old session
+    saveSecret("lastfm-session", "");
+    saveSecret("lastfm-session-name", "");
+    saveSecret("lastfm-pending-token", "");
+  }
+  saveSecret("lastfm-secret", next);
   return lastfmAuth();
 });
 ipcMain.handle("lastfm-disconnect", () => {
   saveSecret("lastfm-session", "");
   saveSecret("lastfm-session-name", "");
+  saveSecret("lastfm-pending-token", "");
   return lastfmAuth();
 });
 
 const sleep = ms => new Promise(done => setTimeout(done, ms));
 let connecting = null;
+
+// The token from auth.getToken is kept until it is used, so a late approval on last.fm still completes:
+// opening Settings again (or pressing Connect) picks it up instead of starting over.
+async function lastfmResume() {
+  const key = loadSecret("lastfm"), secret = loadSecret("lastfm-secret");
+  const token = loadSecret("lastfm-pending-token");
+  if (!key || !secret || !token || loadSecret("lastfm-session")) return;
+  try {
+    const session = await recommendations.authGetSession({ key, secret, token });
+    if (!session.key) return;
+    saveSecret("lastfm-session", session.key);
+    saveSecret("lastfm-session-name", session.name);
+    saveSecret("lastfm-pending-token", "");
+  } catch (e) {
+    // 14 means "not allowed yet" (keep waiting); an expired or unknown token can be thrown away.
+    if (/invalid token|expired/i.test(e?.message || "")) saveSecret("lastfm-pending-token", "");
+  }
+}
 
 // Desktop auth: ask for a token, send the user to last.fm to allow Orchard, then poll for the session key.
 // The user's browser does the signing in, so no Last.fm password ever passes through the app.
@@ -236,8 +262,10 @@ function lastfmConnect() {
   connecting = (async () => {
     const { token } = await recommendations.authGetToken({ key, secret });
     if (!token) throw new Error("Last.fm didn't return a token.");
+    saveSecret("lastfm-pending-token", token);
     await shell.openExternal(`https://www.last.fm/api/auth/?api_key=${encodeURIComponent(key)}&token=${encodeURIComponent(token)}`);
-    const deadline = Date.now() + 180000;
+    // Ten minutes: signing in to last.fm before allowing the app can easily take longer than a few.
+    const deadline = Date.now() + 600000;
     while (Date.now() < deadline) {
       await sleep(2500);
       try {
@@ -245,12 +273,13 @@ function lastfmConnect() {
         if (!session.key) throw new Error("Last.fm returned an empty session.");
         saveSecret("lastfm-session", session.key);
         saveSecret("lastfm-session-name", session.name);
+        saveSecret("lastfm-pending-token", "");
         return lastfmAuth();
       } catch (e) {
         if (!/not been authori[sz]ed|unauthori[sz]ed token/i.test(e?.message || "")) throw e;
       }
     }
-    throw new Error("Last.fm wasn't authorised in time. Press Connect again when you're ready.");
+    throw new Error("Last.fm hasn't confirmed yet. Allow Orchard in the browser, then open Settings again.");
   })().finally(() => { connecting = null; });
   return connecting;
 }

@@ -2134,6 +2134,7 @@ const suggestedUser = () => ($("lfmUser").value || "").trim() || prefs.lastfmUse
 async function suggestedData({ fresh = false } = {}) {
   const day = todayKey(), user = suggestedUser();
   if (!fresh && suggestedCache?.day === day && suggestedCache.user === user) return suggestedCache.data;
+  await glass.lastfmAuth().catch(() => null);   // finishes a Last.fm approval that arrived late
   const r = await glass.lastfmSuggested({ user });
   if (r?.error) throw new Error(r.error);
   suggestedCache = { day, user, data: r };
@@ -3094,6 +3095,7 @@ const toggleSettings = open => {
   if (open) {
     refreshAccount();
     paintLocalSettings();
+    showLastfmAuth();       // also finishes a Last.fm connection approved after Connect gave up
   }
 };
 $("settingsBtn").onclick = () => toggleSettings(overlay.hidden);
@@ -3208,9 +3210,11 @@ function paintLastfmAuth(st) {
   $("lfmConnect").disabled = !st?.hasSecret;
   $("lfmAuthStatus").textContent = connected
     ? `Connected as ${st.user}. Suggested uses Last.fm's own recommendations.`
-    : st?.hasSecret
-      ? "Not connected. Press Connect and allow Orchard on last.fm to use its own suggestions."
-      : "Not connected: Suggested uses your top genres. Add the API secret to use Last.fm's own suggestions.";
+    : st?.pending
+      ? "Waiting for last.fm to confirm. Allow Orchard in the browser, then reopen Settings."
+      : st?.hasSecret
+        ? "Not connected. Press Connect and allow Orchard on last.fm to use its own suggestions."
+        : "Not connected: Suggested uses your top genres. Add the API secret to use Last.fm's own suggestions.";
 }
 async function showLastfmAuth() {
   try { paintLastfmAuth(await glass.lastfmAuth()); } catch {}
@@ -3228,10 +3232,15 @@ $("lfmConnect").onclick = async () => {
   try {
     paintLastfmAuth(await glass.lastfmConnect());
     suggestedCache = null;
+    // The playlist made a moment ago came from the fallback; let today's build again with the real thing.
+    prefs.suggestedAttempt = null;
+    prefs.suggestedPlaylist = null;
+    savePrefs();
+    maybeAutoCreateSuggested();
     if (view === "suggested") load();
   } catch (e) {
+    // Keep the reason on screen: repainting the status here would replace it with "Not connected".
     $("lfmAuthStatus").textContent = String(e?.message || e).replace(/^.*Error: /, "");
-    showLastfmAuth();
   }
   b.disabled = false;
 };
