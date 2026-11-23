@@ -281,8 +281,8 @@ async function artistTopTracks(artistId, { token, storefront, fetchFn = fetch } 
 }
 
 // A few songs from each record first, so the playlist is a spread of suggestions rather than one album's
-// worth; then each artist's top songs, and only then the rest of the albums to fill any gap.
-async function buildSuggestedTracks({ albums = [], artists = [], token, storefront, fetchFn = fetch, maxTracks = 30 } = {}) {
+// worth; then each artist's top songs, and then the rest of both to fill up to the cap.
+async function buildSuggestedTracks({ albums = [], artists = [], token, storefront, fetchFn = fetch, maxTracks = 100 } = {}) {
   const out = [], seen = new Set(), fetched = new Map();
   const add = r => {
     const id = r?.id;
@@ -301,24 +301,30 @@ async function buildSuggestedTracks({ albums = [], artists = [], token, storefro
       if (add(t)) taken++;
     }
   };
-  // Each album is asked for once; a second pass reuses the answer instead of hitting Apple again.
-  const tracksOfAlbum = a => {
-    if (!fetched.has(a)) fetched.set(a, albumTracks(a.apple.id, { token, storefront, fetchFn }).catch(() => []));
-    return fetched.get(a);
+  // Each album and artist is asked for once; later passes reuse the answer instead of hitting Apple again.
+  const once = (key, load) => {
+    if (!fetched.has(key)) fetched.set(key, load().catch(() => []));
+    return fetched.get(key);
   };
   const usable = list => list.filter(a => a.found && a.apple?.id);
+  const albumList = a => once("a:" + a.apple.id, () => albumTracks(a.apple.id, { token, storefront, fetchFn }));
+  const artistList = a => once("t:" + a.apple.id, () => artistTopTracks(a.apple.id, { token, storefront, fetchFn }));
 
   for (const a of usable(albums)) {
     if (out.length >= maxTracks) break;
-    take(await tracksOfAlbum(a), 3);
+    take(await albumList(a), 3);
   }
   for (const a of usable(artists)) {
     if (out.length >= maxTracks) break;
-    try { take(await artistTopTracks(a.apple.id, { token, storefront, fetchFn }), 2); } catch {}
+    take(await artistList(a), 2);
   }
   for (const a of usable(albums)) {
     if (out.length >= maxTracks) break;
-    take(await tracksOfAlbum(a), Infinity);
+    take(await albumList(a), Infinity);
+  }
+  for (const a of usable(artists)) {
+    if (out.length >= maxTracks) break;
+    take(await artistList(a), Infinity);
   }
   return out.slice(0, maxTracks);
 }

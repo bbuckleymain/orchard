@@ -430,7 +430,7 @@ ipcMain.handle("lastfm-suggested", async (_e, query) => {
       recommendations.matchArtists(artists, { token: tok, storefront }),
     ]);
     const tracks = await recommendations.buildSuggestedTracks({
-      albums: mAlbums, artists: mArtists, token: tok, storefront, maxTracks: 30,
+      albums: mAlbums, artists: mArtists, token: tok, storefront, maxTracks: 100,
     });
     return { albums: mAlbums, artists: mArtists, tracks };
   } catch (e) {

@@ -205,6 +205,18 @@ test("buildSuggestedTracks ignores anything that isn't a streamable song", async
   assert.deepEqual(out.map(t => t.id), ["s1"]);
 });
 
+test("buildSuggestedTracks fills a 100-song playlist by default", async () => {
+  const song = id => ({ id, type: "songs", attributes: { name: id, playParams: { id } } });
+  const fetchFn = async url => {
+    const m = /\/albums\/(\w+)\/tracks/.exec(url);
+    return json({ data: Array.from({ length: 50 }, (_, i) => song(`${m[1]}${i}`)) })();
+  };
+  const albums = ["a", "b", "c"].map(id => ({ found: true, apple: { id } }));
+  const out = await rec.buildSuggestedTracks({ albums, token: "t", storefront: "us", fetchFn });
+  assert.equal(out.length, 100);
+  assert.equal(new Set(out.map(t => t.id)).size, 100, "no repeats");
+});
+
 test("albumsByArtists skips compilations and repeats", async () => {
   const replies = {
     "artist=One": { topalbums: { album: [{ name: "Greatest Hits" }, { name: "First" }, { name: "Second" }, { name: "Third" }] } },
