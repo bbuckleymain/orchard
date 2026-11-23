@@ -234,18 +234,18 @@ ipcMain.handle("lastfm-suggested", async () => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const token = await token();
+    const tok = await token();
     const storefront = (loadAccount()?.storefront || "us").toLowerCase();
     const [albums, artists] = await Promise.all([
       recommendations.fetchRecommendedAlbums(),
       recommendations.fetchRecommendedArtists(),
     ]);
     const [mAlbums, mArtists] = await Promise.all([
-      recommendations.matchAlbums(albums, { token, storefront }),
-      recommendations.matchArtists(artists, { token, storefront }),
+      recommendations.matchAlbums(albums, { token: tok, storefront }),
+      recommendations.matchArtists(artists, { token: tok, storefront }),
     ]);
     const tracks = await recommendations.buildSuggestedTracks({
-      albums: mAlbums, artists: mArtists, token, storefront, maxTracks: 30,
+      albums: mAlbums, artists: mArtists, token: tok, storefront, maxTracks: 30,
     });
     return { albums: mAlbums, artists: mArtists, tracks };
   } catch (e) {
