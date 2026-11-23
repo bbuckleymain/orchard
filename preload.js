@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld("glass", {
   lastfmRecommended: query => ipcRenderer.invoke("lastfm-recommended", query),
   lastfmSuggested: query => ipcRenderer.invoke("lastfm-suggested", query),
   spotifyImport: query => ipcRenderer.invoke("spotify-import", query),
+  spotifyStatus: () => ipcRenderer.invoke("spotify-status"),
+  setSpotifyKey: query => ipcRenderer.invoke("spotify-key", query),
   window: action => ipcRenderer.send("window", action),
   mprisState: state => ipcRenderer.send("mpris-state", state),
   onMpris: cb => ipcRenderer.on("mpris", (_e, msg) => cb(msg)),

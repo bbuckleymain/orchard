@@ -31,8 +31,9 @@ step — CommonJS everywhere.
 - `local-library.js` is pure Node (no Electron) so it can be tested; it parses FLAC/ID3v2/MP4/WAV by hand with no
   dependencies. Library data lives in Electron `userData` (`local-library.json`, `local-cache.json`,
   `local-lyrics.json`, `artist-photos.json`, `covers/`), not in the repo.
-- `spotify.js` is pure Node: it turns a playlist link into an id and reads the public embed page's
-  `__NEXT_DATA__` for the name and tracks (the page stops at 50). Apple matching happens in
+- `spotify.js` is pure Node: it turns a playlist link into an id and reads either the public embed page's
+  `__NEXT_DATA__` (no credentials, first 50 tracks) or the Web API with the user's client id/secret (whole
+  playlist, client-credentials token, 100 a page). Apple matching happens in
   `recommendations.matchSongs`, and the playlist is created through `amp()` in the renderer.
 - `recommendations.js` is pure Node too: Last.fm's API and Apple catalogue search. The exact list comes from
   `main.js` reading `last.fm/music/+recommended/{artists,albums}` in a hidden window on the `persist:lastfm`

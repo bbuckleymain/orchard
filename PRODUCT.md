@@ -34,9 +34,9 @@ large FLAC collection and an Apple Music subscription, and they do not want two 
   their library. It is written to the user's Apple Music library as a playlist, replaced when a new day's set
   is made, and only when the user turns the daily toggle on.
 - Orchard is unofficial and not affiliated with Apple.
-- Importing a Spotify playlist reads its public embed page (no Spotify account or credentials) and matches each
-  track on Apple Music; private playlists can't be read, and the public page lists the first 50 tracks. The
-  result is a new playlist in the user's Apple Music library.
+- Importing a Spotify playlist matches each track on Apple Music and writes a new playlist to the user's Apple
+  Music library. With no credentials it reads Spotify's public embed page (first 50 tracks); a client id and
+  secret, stored encrypted, switch it to the Web API for the whole playlist. Private playlists can't be read.
 
 ## Surface
 

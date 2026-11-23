@@ -404,6 +404,12 @@
         </div>
         <div class="muted" id="spotifyStatus"></div>
         <details><summary class="muted">Tracks not found on Apple Music</summary><pre class="muted" id="spotifyMissing"></pre></details>
+        <div class="inline-row">
+          <input id="spotifyId" type="password" placeholder="Spotify client id" autocomplete="off">
+          <input id="spotifySecret" type="password" placeholder="Spotify client secret" autocomplete="off">
+          <button class="action" id="spotifyKeySave">Save</button>
+        </div>
+        <div class="muted" id="spotifyCreds">No client id: imports stop at Spotify's public 50 tracks.</div>
       </div>
 
       <p class="sheet-section">Keyboard</p>

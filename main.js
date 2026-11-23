@@ -465,13 +465,28 @@ ipcMain.handle("lastfm-suggested", async (_e, query) => {
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
 
-// A Spotify playlist, matched onto Apple Music. Reads the public embed page (no credentials) and returns the
-// Apple song resources in playlist order, so the renderer can create the playlist the same way as Suggested.
+// A Spotify playlist, matched onto Apple Music. With a client id and secret the Web API reads the whole
+// playlist; without them the public embed page is used, which stops at 50 tracks. Either way the Apple song
+// resources come back in playlist order, so the renderer creates the playlist the same way as Suggested.
+ipcMain.handle("spotify-status", () => ({
+  hasId: !!loadSecret("spotify-id"),
+  hasSecret: !!loadSecret("spotify-secret"),
+}));
+ipcMain.handle("spotify-key", (_e, query) => {
+  const id = String(query?.id || "").trim(), secret = String(query?.secret || "").trim();
+  if (id) saveSecret("spotify-id", id);
+  if (secret) saveSecret("spotify-secret", secret);
+  if (query?.clear) { saveSecret("spotify-id", ""); saveSecret("spotify-secret", ""); }
+  return { hasId: !!loadSecret("spotify-id"), hasSecret: !!loadSecret("spotify-secret") };
+});
 ipcMain.handle("spotify-import", async (_e, query) => {
   try {
     const id = spotify.playlistId(query?.url);
     if (!id) return { error: "That doesn't look like a Spotify playlist link." };
-    const list = await spotify.embed(id);
+    const clientId = loadSecret("spotify-id"), clientSecret = loadSecret("spotify-secret");
+    const list = clientId && clientSecret
+      ? await spotify.apiPlaylist(id, { clientId, clientSecret })
+      : await spotify.embed(id);
     const tok = await token();
     const storefront = (loadAccount()?.storefront || "us").toLowerCase();
     const matched = await recommendations.matchSongs(list.tracks, { token: tok, storefront });

@@ -46,3 +46,45 @@ test("a Spotify error status is reported", async () => {
   const fetchFn = async () => ({ ok: false, status: 404, text: async () => "" });
   await assert.rejects(spotify.embed("id", { fetchFn }), /404/);
 });
+
+test("apiPlaylist exchanges the client credentials and pages through every track", async () => {
+  const calls = [];
+  const fetchFn = async (url, opts = {}) => {
+    calls.push({ url, method: opts.method || "GET", auth: opts.headers?.Authorization || "" });
+    if (url.startsWith("https://accounts.spotify.com/api/token")) {
+      return { ok: true, status: 200, json: async () => ({ access_token: "AT" }) };
+    }
+    if (url.includes("?fields=name")) return { ok: true, status: 200, json: async () => ({ name: "Long List" }) };
+    if (url.includes("offset=2")) return { ok: true, status: 200, json: async () => ({
+      items: [{ track: { name: "Two", artists: [{ name: "B" }, { name: "C" }], duration_ms: 2000, type: "track" } }],
+      next: null,
+    }) };
+    return { ok: true, status: 200, json: async () => ({
+      items: [
+        { track: { name: "One", artists: [{ name: "A" }], duration_ms: 1000, type: "track" } },
+        { track: { name: "Podcast", artists: [], duration_ms: 0, type: "episode" } },
+      ],
+      next: "https://api.spotify.com/v1/playlists/x/tracks?offset=2",
+    }) };
+  };
+  const out = await spotify.apiPlaylist("x", { clientId: "ID", clientSecret: "SECRET", fetchFn });
+  assert.equal(out.name, "Long List");
+  assert.deepEqual(out.tracks, [
+    { title: "One", artist: "A", ms: 1000 },
+    { title: "Two", artist: "B, C", ms: 2000 },
+  ], "episodes are skipped and several artists are joined");
+  assert.equal(out.partial, false);
+  assert.equal(calls[0].method, "POST");
+  assert.match(calls[0].auth, /^Basic /);
+  assert.ok(calls.slice(1).every(c => c.auth === "Bearer AT"));
+});
+
+test("apiPlaylist reports rejected credentials and private playlists", async () => {
+  const badCreds = async () => ({ ok: false, status: 401, json: async () => ({}) });
+  await assert.rejects(spotify.apiPlaylist("x", { clientId: "I", clientSecret: "S", fetchFn: badCreds }), /rejected the client id or secret/);
+
+  const fetchFn = async url => url.startsWith("https://accounts.spotify.com")
+    ? { ok: true, status: 200, json: async () => ({ access_token: "AT" }) }
+    : { ok: false, status: 404, json: async () => ({}) };
+  await assert.rejects(spotify.apiPlaylist("x", { clientId: "I", clientSecret: "S", fetchFn }), /private, empty/);
+});

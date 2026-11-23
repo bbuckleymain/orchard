@@ -2429,7 +2429,25 @@ $("autoSuggestedPlaylist").onchange = e => { prefs.autoSuggestedPlaylist = e.tar
 
 // ---- import from Spotify -------------------------------------------------------------------------
 // The playlist is read from Spotify's public embed page, each track is matched on Apple Music, and the
-// matches become a new Apple Music playlist with the Spotify playlist's name.
+// matches become a new Apple Music playlist with the Spotify playlist's name. A client id and secret switch
+// the read to the Web API, which has no 50-track limit.
+function paintSpotifyCreds(st) {
+  $("spotifyCreds").textContent = st?.hasId && st?.hasSecret
+    ? "Client id saved: imports read the whole playlist."
+    : st?.hasId || st?.hasSecret
+      ? "Only half saved: imports stop at Spotify's public 50 tracks until both are in."
+      : "No client id: imports stop at Spotify's public 50 tracks.";
+}
+async function showSpotifyCreds() {
+  try { paintSpotifyCreds(await glass.spotifyStatus()); } catch {}
+}
+$("spotifyKeySave").onclick = async () => {
+  const st = await glass.setSpotifyKey({ id: $("spotifyId").value, secret: $("spotifySecret").value });
+  $("spotifyId").value = $("spotifySecret").value = "";
+  paintSpotifyCreds(st);
+};
+showSpotifyCreds();
+
 $("spotifyImport").onclick = async () => {
   const b = $("spotifyImport"), note = $("spotifyStatus");
   if (!music?.isAuthorized) { note.textContent = "Sign in to Apple Music first (Account)."; return; }
@@ -3274,6 +3292,7 @@ const toggleSettings = open => {
     refreshAccount();
     paintLocalSettings();
     showLastfmAuth();       // also finishes a Last.fm connection approved after Connect gave up
+    showSpotifyCreds();
   }
 };
 $("settingsBtn").onclick = () => toggleSettings(overlay.hidden);

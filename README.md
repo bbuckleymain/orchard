@@ -33,8 +33,9 @@ You can build playlists by hand: **Library → Playlists → New playlist** make
 signed in, in your Apple Music library. Add or remove songs, albums or artists from any right-click menu.
 
 **Import from Spotify** (Settings) takes a public Spotify playlist link, finds each track on Apple Music and
-creates a playlist with the same name; anything it could not find is listed. Spotify's public page lists the
-first 50 tracks, which the import says when it applies.
+creates a playlist with the same name; anything it could not find is listed. Without credentials it reads
+Spotify's public embed page, which stops at 50 tracks; saving your own Spotify **client id and secret** (from
+the Spotify developer dashboard) switches to the Web API and imports the whole playlist.
 
 The five-band equalizer (Flat, Warm, Bright, Vocal, Bass) works on local files only. Web Audio cannot process
 Apple's protected stream. The library stays in Electron's user data directory, and Orchard uploads nothing.

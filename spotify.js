@@ -43,4 +43,52 @@ async function embed(id, { fetchFn = fetch } = {}) {
   };
 }
 
-module.exports = { playlistId, embed };
+// The Web API, when the user has supplied their own client id and secret. A client-credentials token can read
+// any public playlist in full, so the 50-track limit of the embed page doesn't apply.
+async function apiToken({ clientId, clientSecret, fetchFn = fetch }) {
+  const r = await fetchFn("https://accounts.spotify.com/api/token", {
+    method: "POST",
+    headers: {
+      Authorization: "Basic " + Buffer.from(`${clientId}:${clientSecret}`).toString("base64"),
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: "grant_type=client_credentials",
+    signal: AbortSignal.timeout(TIMEOUT),
+  });
+  if (!r.ok) {
+    throw new Error(r.status === 400 || r.status === 401
+      ? "Spotify rejected the client id or secret."
+      : `Spotify's token endpoint answered ${r.status}`);
+  }
+  const j = await r.json();
+  if (!j.access_token) throw new Error("Spotify didn't return an access token.");
+  return j.access_token;
+}
+
+async function apiPlaylist(id, { clientId, clientSecret, fetchFn = fetch } = {}) {
+  const token = await apiToken({ clientId, clientSecret, fetchFn });
+  const get = async url => {
+    const r = await fetchFn(url, { headers: { Authorization: "Bearer " + token }, signal: AbortSignal.timeout(TIMEOUT) });
+    if (r.status === 404) throw new Error("That playlist is private, empty, or doesn't exist.");
+    if (!r.ok) throw new Error(`Spotify answered ${r.status}`);
+    return r.json();
+  };
+  const base = `https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`;
+  const meta = await get(`${base}?fields=name`);
+  const tracks = [];
+  let url = `${base}/tracks?limit=100&fields=${encodeURIComponent("items(track(name,artists(name),duration_ms,type)),next")}`;
+  while (url) {
+    const page = await get(url);
+    for (const it of page.items || []) {
+      const t = it?.track;
+      if (!t || t.type === "episode" || !t.name) continue;     // podcasts in a playlist aren't songs
+      tracks.push({ title: t.name, artist: (t.artists || []).map(a => a.name).join(", "), ms: +t.duration_ms || 0 });
+    }
+    url = page.next || "";
+    if (tracks.length > 5000) break;                            // a runaway page chain isn't a playlist
+  }
+  if (!tracks.length) throw new Error("That playlist is private, empty, or doesn't exist.");
+  return { name: String(meta.name || "Spotify playlist").trim(), tracks, partial: false };
+}
+
+module.exports = { playlistId, embed, apiPlaylist };
