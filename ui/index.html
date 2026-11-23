@@ -441,11 +441,44 @@
     </div>
   </div>
 
+  <section id="reviewer" hidden aria-label="Playlist reviewer">
+    <div class="review-top">
+      <button id="reviewClose" class="icon-btn" title="Close (Esc)" aria-label="Close"><svg class="icon"><use href="#i-close"/></svg></button>
+      <div class="review-head">
+        <div class="review-title" id="reviewTitle">Playlist</div>
+        <div class="review-count" id="reviewCount"></div>
+      </div>
+      <div class="review-spacer" aria-hidden="true"></div>
+    </div>
+    <div class="review-stage">
+      <div class="review-card" id="reviewCard">
+        <div class="review-art" id="reviewArt"></div>
+        <div class="review-meta">
+          <div class="review-song" id="reviewSong"></div>
+          <div class="review-artist" id="reviewArtist"></div>
+          <div class="review-album" id="reviewAlbum"></div>
+        </div>
+      </div>
+      <div class="review-done" id="reviewDone" hidden>
+        <div class="review-done-icon"><svg class="icon"><use href="#i-spark"/></svg></div>
+        <h2>That's the whole playlist</h2>
+        <p id="reviewSummary"></p>
+        <button class="action" id="reviewFinish">Done</button>
+      </div>
+    </div>
+    <div class="review-actions">
+      <button id="reviewReject" class="review-btn reject" title="Remove from the playlist (←)" aria-label="Remove from the playlist"><svg class="icon"><use href="#i-close"/></svg></button>
+      <button id="reviewKeep" class="review-btn keep" title="Keep it (→)" aria-label="Keep it"><svg class="icon"><use href="#i-heart"/></svg></button>
+    </div>
+    <div class="review-hint">← remove · → keep · Esc close</div>
+  </section>
+
   <div id="menu" hidden role="menu"></div>
   <audio id="localAudio" preload="metadata"></audio>
 
   <script src="lyrics.js"></script>
   <script src="queue.js"></script>
+  <script src="review.js"></script>
   <script src="app.js"></script>
   <script src="https://js-cdn.music.apple.com/musickit/v3/musickit.js" data-web-components async></script>
 </body>

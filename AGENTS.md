@@ -26,8 +26,8 @@ step — CommonJS everywhere.
 - Two engines share the UI: Apple Music and local files (`#localAudio`). `localMode`/`localItem()` says which is
   current; starting one must stop the other (`leaveLocal()` / `music.pause()`). The full seek input `#seek` is a
   0–1 fraction (`step="0.001"`), not seconds.
-- `ui/lyrics.js` and `ui/queue.js` are classic-script IIFEs with a `module.exports` guard so tests can require them.
-  Keep them dependency-free and CommonJS-testable.
+- `ui/lyrics.js`, `ui/queue.js` and `ui/review.js` are classic-script IIFEs with a `module.exports` guard so tests
+  can require them. Keep them dependency-free and CommonJS-testable.
 - `local-library.js` is pure Node (no Electron) so it can be tested; it parses FLAC/ID3v2/MP4/WAV by hand with no
   dependencies. Library data lives in Electron `userData` (`local-library.json`, `local-cache.json`,
   `local-lyrics.json`, `artist-photos.json`, `covers/`), not in the repo.

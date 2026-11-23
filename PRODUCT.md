@@ -33,6 +33,8 @@ large FLAC collection and an Apple Music subscription, and they do not want two 
   Last.fm there; without that sign-in it falls back to the similar-artist graph around what they play, minus
   their library. It is written to the user's Apple Music library as a playlist, replaced when a new day's set
   is made, and only when the user turns the daily toggle on.
+- The Playlist Reviewer walks a playlist one song at a time, with keep and remove as the only decisions;
+  removing is applied to the playlist immediately, so closing the reviewer keeps whatever was decided.
 - Orchard is unofficial and not affiliated with Apple.
 - Importing a Spotify playlist matches each track on Apple Music and writes a new playlist to the user's Apple
   Music library. With no credentials it reads Spotify's public embed page (first 50 tracks); a client id and

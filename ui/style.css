@@ -883,6 +883,61 @@ details { margin-top: 8px; }
 summary { cursor: pointer; }
 #lfmMissing { white-space: pre-wrap; max-height: 120px; overflow: auto; margin: 6px 0 0; font-size: var(--text-xs); }
 
+/* ---- playlist reviewer ---------------------------------------------------------------------- */
+#reviewer {
+  position: fixed; inset: 0; z-index: 70;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  padding: 60px 20px 22px;
+  background:
+    radial-gradient(120% 80% at 50% 0%, color-mix(in srgb, var(--accent) 26%, transparent), transparent 72%),
+    rgba(18, 14, 24, .62);
+  backdrop-filter: blur(28px) saturate(1.2);
+  animation: reviewIn .2s var(--ease);
+}
+#reviewer[hidden] { display: none; }
+@keyframes reviewIn { from { opacity: 0; } }
+.review-top { position: absolute; top: 14px; left: 16px; right: 16px; display: flex; align-items: center; gap: 12px; }
+.review-top .icon-btn { color: rgba(255, 255, 255, .75); }
+.review-top .icon-btn:hover { background: rgba(255, 255, 255, .14); color: #fff; }
+.review-head { flex: 1; min-width: 0; text-align: center; }
+.review-title { font-size: var(--text-lg); font-weight: 750; letter-spacing: -.01em; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.review-count { margin-top: 2px; font-size: var(--text-xs); color: rgba(255, 255, 255, .62); font-variant-numeric: tabular-nums; }
+.review-spacer { width: 34px; flex: none; }
+.review-stage { position: relative; width: min(330px, 80vw); }
+.review-card {
+  padding: 13px 13px 16px; border-radius: var(--r-xl); text-align: center;
+  background: var(--panel-strong); border: 1px solid var(--panel-border); box-shadow: var(--shadow-lg);
+  transition: transform .18s var(--ease), opacity .18s;
+}
+.review-card.leaving-left { transform: translateX(-46px) rotate(-3deg); opacity: 0; }
+.review-card.leaving-right { transform: translateX(46px) rotate(3deg); opacity: 0; }
+.review-art { aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; background: var(--panel-2); box-shadow: 0 22px 44px -26px rgba(20, 5, 30, .7); }
+.review-art img { width: 100%; height: 100%; object-fit: cover; }
+.review-art .art-fallback { width: 100%; height: 100%; border-radius: 0; font-size: 40px; }
+.review-meta { margin-top: 14px; }
+.review-song { font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
+.review-artist { margin-top: 3px; font-size: var(--text-md); color: var(--ink-2); }
+.review-album { margin-top: 2px; font-size: var(--text-xs); color: var(--ink-3); }
+.review-actions { display: flex; align-items: center; gap: 28px; }
+.review-btn {
+  width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--panel-2); border: 1px solid var(--panel-border); box-shadow: var(--shadow); color: var(--ink-2);
+  transition: transform .14s var(--ease), background .16s, color .16s, border-color .16s;
+}
+.review-btn .icon { width: 26px; height: 26px; }
+.review-btn:hover { transform: translateY(-2px); }
+.review-btn:active { transform: scale(.94); }
+.review-btn[hidden] { display: none; }
+.review-btn.reject:hover { background: color-mix(in srgb, #c0392b 16%, var(--panel-2)); border-color: color-mix(in srgb, #c0392b 34%, transparent); color: #8c2f3a; }
+.review-btn.keep { background: var(--accent-button); color: var(--accent-ink); border-color: color-mix(in srgb, var(--accent) 72%, black); }
+.review-btn.keep:hover { filter: brightness(1.06); }
+.review-hint { font-size: var(--text-xs); color: rgba(255, 255, 255, .58); letter-spacing: .02em; }
+.review-done { text-align: center; color: #fff; }
+.review-done-icon { width: 54px; height: 54px; margin: 0 auto; display: grid; place-items: center; border-radius: 50%; background: var(--accent-faint); color: var(--accent-strong); }
+.review-done-icon .icon { width: 26px; height: 26px; }
+.review-done h2 { margin: 12px 0 4px; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.review-done p { margin: 0 0 16px; font-size: var(--text-md); color: rgba(255, 255, 255, .7); }
+
 /* ---- menu --------------------------------------------------------------------------------- */
 #menu {
   position: fixed; z-index: 80; min-width: 188px; max-height: 70vh; overflow-y: auto; padding: 5px; border-radius: 13px;

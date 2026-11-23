@@ -2053,6 +2053,7 @@ const ACTIONS = {
     return `Added to your library: ${item.title}`;
   },
   async open(item) { await open(item); return ""; },
+  async review(item) { await openReviewer(item); return ""; },
   async goAlbum(item) {
     const album = item.local
       ? local.albums.find(a => a.albumKey && a.albumKey === item.albumKey)
@@ -2495,7 +2496,87 @@ async function maybeAutoCreateSuggested() {
   autoSuggestedBusy = false;
 }
 
-$("rememberVol").checked = prefs.rememberVolume;
+// ---- playlist reviewer ---------------------------------------------------------------------------
+// Right-click a playlist (or use its "…" menu) and go through it a song at a time: keep it or remove it.
+// The decisions live in ui/review.js; this is the card, the two buttons and the keys.
+let review = null;
+
+async function removeFromPlaylist(item, song) {
+  if (item.local) {
+    const pl = item.playlist || localPlaylists.find(p => p.id === item.id);
+    if (!pl) throw new Error("playlist not found");
+    pl.trackIds = (pl.trackIds || []).filter(id => id !== song.id);
+    saveLocalPlaylists();
+    return;
+  }
+  if (!item.canEdit) throw new Error("this playlist can't be edited");
+  await amp("DELETE", `/v1/me/library/playlists/${item.id}/tracks/${song.id}`);
+}
+
+function paintReview() {
+  if (!review) return;
+  const run = review.run;
+  $("reviewCount").textContent = run.done ? `${run.total} reviewed` : `${run.index + 1} of ${run.total}`;
+  $("reviewReject").hidden = $("reviewKeep").hidden = run.done;
+  $("reviewCard").hidden = run.done;
+  $("reviewDone").hidden = !run.done;
+  if (run.done) {
+    $("reviewSummary").textContent = `${run.kept} kept · ${run.rejected} removed`;
+    return;
+  }
+  const song = run.current;
+  $("reviewSong").textContent = song.title || "";
+  $("reviewArtist").textContent = song.artist || "";
+  $("reviewAlbum").textContent = song.album || "";
+  const art = $("reviewArt");
+  art.innerHTML = "";
+  art.appendChild(artNode(song, "review-cover", 600));
+}
+
+async function openReviewer(item) {
+  try {
+    status("Loading the playlist…");
+    const songs = await tracksOf(item);
+    status("");
+    if (!songs.length) throw new Error("this playlist is empty");
+    review = { item, run: OrchardReview.createReviewer(songs), busy: false };
+    $("reviewTitle").textContent = item.title || "Playlist";
+    $("reviewer").hidden = false;
+    paintReview();
+  } catch (e) { status("Couldn't review that playlist: " + (e?.message || e), true); }
+}
+
+async function closeReviewer() {
+  if (!review) return;
+  const item = review.item;
+  review = null;
+  $("reviewer").hidden = true;
+  if (lastPage?.hero?.item?.id === item.id) {          // the page on screen is the playlist that changed
+    try { renderPage(await playlistPage(item)); } catch {}
+  }
+}
+
+async function decideReview(keep) {
+  if (!review || review.busy || review.run.done) return;
+  review.busy = true;
+  const card = $("reviewCard");
+  try {
+    if (!keep) await removeFromPlaylist(review.item, review.run.current);   // only advance once it's gone
+    card.classList.add(keep ? "leaving-right" : "leaving-left");
+    await new Promise(done => setTimeout(done, 170));
+    card.classList.remove("leaving-right", "leaving-left");
+    keep ? review.run.keep() : review.run.reject();
+    paintReview();
+  } catch (e) {
+    status("Couldn't remove that song: " + (e?.message || e), true);
+  }
+  review.busy = false;
+}
+
+$("reviewKeep").onclick = () => decideReview(true);
+$("reviewReject").onclick = () => decideReview(false);
+$("reviewClose").onclick = closeReviewer;
+$("reviewFinish").onclick = closeReviewer;
 
 // ---- the queue ---------------------------------------------------------------------------------
 // Up Next can be rearranged by dragging, a song removed with its × (or the right-click menu), and the lot
@@ -3040,13 +3121,14 @@ const MENU_ICONS = {
   back: "i-back", qplay: "i-play", qtop: "i-chevron-down", qup: "i-chevron-down",
   qdown: "i-chevron-down", qbottom: "i-chevron-down", qremove: "i-close",
   fetchLyrics: "i-lyrics", deletePlaylist: "i-trash", removeFromPlaylist: "i-close",
-  goAlbum: "i-disc", goArtist: "i-users", mkLocal: "i-folder", mkApple: "i-music",
+  goAlbum: "i-disc", goArtist: "i-users", mkLocal: "i-folder", mkApple: "i-music", review: "i-spark",
 };
 
 function menuEntries(item) {
   if (item.local) {
     if (item.kind === "playlist") return [
       ["play", "Play"], ["shuffle", "Shuffle"], "-",
+      ["review", "Review Playlist…"], "-",
       ["deletePlaylist", "Delete playlist"],
     ];
     if (item.kind === "song") {
@@ -3074,8 +3156,12 @@ function menuEntries(item) {
                          ["goAlbum", "Go to Album"], ["goArtist", "Go to Artist"], "-",
                          canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
     case "album":
-    case "playlist": return [["play", "Play"], ["shuffle", "Shuffle"], ["next", "Play Next"], ["later", "Add to Queue"], "-",
-                             canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]];
+    case "playlist": {
+      const entries = [["play", "Play"], ["shuffle", "Shuffle"], ["next", "Play Next"], ["later", "Add to Queue"], "-"];
+      if (item.kind === "playlist" && item.canEdit) entries.push(["review", "Review Playlist…"], "-");
+      entries.push(canAdd && ["library", "Add to Library"], signedIn && ["playlist", "Add to Playlist…"]);
+      return entries;
+    }
     case "artist": return [["open", "Go to Artist"], "-", ["play", "Play Top Songs"], ["shuffle", "Shuffle Top Songs"]];
     case "category": return item.id === "songs" ? [["shuffle", "Shuffle All"], ["play", "Play All"]] : [];
     default: return [];
@@ -3593,6 +3679,11 @@ $("sidebarToggle").onclick = () => {
 };
 
 document.addEventListener("keydown", e => {
+  if (review) {                                    // the reviewer owns the keys while it is open
+    if (e.key === "Escape") { e.preventDefault(); closeReviewer(); return; }
+    if (e.key === "ArrowLeft") { e.preventDefault(); decideReview(false); return; }
+    if (e.key === "ArrowRight") { e.preventDefault(); decideReview(true); return; }
+  }
   const el = document.activeElement;
   // Any text box counts (the search, the API keys), so typing there never fires a shortcut.
   const typing = !!el && (el.isContentEditable || el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && !["range", "checkbox"].includes(el.type)));
