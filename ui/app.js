@@ -2218,14 +2218,22 @@ async function suggestedPage() {
 // new playlist's library id, which is remembered so the next day knows what to delete.
 const SUGGESTED_MARK = "Last.fm suggestions for ";
 
+// Apple's create reply and its library listing do not always agree on the "p." prefix on a playlist id, and
+// a mismatch used to make the cleanup delete the playlist that had just been made.
+const sameId = (a, b) => String(a || "").replace(/^p\./, "") === String(b || "").replace(/^p\./, "");
+
+async function libraryPlaylists() {
+  try { return (await amp("GET", "/v1/me/library/playlists?limit=100"))?.data || null; }
+  catch { return null; }
+}
+
 // Yesterday's copy, and any left behind if the saved settings were lost. Only playlists carrying our own
 // description are removed, so a playlist of the user's that happens to share the name is left alone.
 async function removeOldSuggested(keepId) {
-  let list = [];
-  try { list = (await amp("GET", "/v1/me/library/playlists?limit=100"))?.data || []; } catch { return; }
-  for (const p of list) {
+  const list = await libraryPlaylists();
+  for (const p of list || []) {
     const a = p.attributes || {};
-    if (p.id === keepId || a.name !== SUGGESTED_NAME) continue;
+    if (sameId(p.id, keepId) || a.name !== SUGGESTED_NAME) continue;
     if (!String(a.description || "").startsWith(SUGGESTED_MARK)) continue;
     try { await amp("DELETE", `/v1/me/library/playlists/${p.id}`); } catch {}
   }
@@ -2250,10 +2258,18 @@ async function buildSuggestedPlaylist(data) {
     try { await amp("DELETE", `/v1/me/library/playlists/${id}`); } catch {}
     throw e;
   }
+  const previous = prefs.suggestedPlaylist?.id;
+  if (previous && !sameId(previous, id)) {
+    try { await amp("DELETE", `/v1/me/library/playlists/${previous}`); } catch {}
+  }
   await removeOldSuggested(id);
+  // Apple accepts a playlist before it shows up in the library listing; say so rather than leave the user
+  // wondering whether it was made at all.
+  const listed = await libraryPlaylists();
+  const pending = !!listed && !listed.some(p => sameId(p.id, id));
   prefs.suggestedPlaylist = { id, day: todayKey(), songs: songs.length, version: SUGGESTED_VERSION };
   savePrefs();
-  return { id, songs };
+  return { id, songs, pending };
 }
 
 const suggestNote = text => { $("suggestStatus").textContent = text; };
@@ -2264,8 +2280,10 @@ $("suggestCreateBtn").onclick = async () => {
   b.disabled = true;
   suggestNote("Building the playlist…");
   try {
-    const { songs } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
-    suggestNote(`Created “${SUGGESTED_NAME}” with ${songs.length} song${songs.length === 1 ? "" : "s"}.`);
+    const { songs, pending } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
+    suggestNote(pending
+      ? `Created “${SUGGESTED_NAME}” with ${songs.length} songs. Apple hasn't listed it in your library yet; it can take a moment to sync.`
+      : `Created “${SUGGESTED_NAME}” with ${songs.length} song${songs.length === 1 ? "" : "s"}.`);
     if (view === "suggested") load();
     if (view === "library" && libraryFilter === "playlists") load();
   } catch (e) {
