@@ -216,11 +216,11 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
 // Last.fm recommendations -> Apple Music. Your top artists (or the charts, with no username) seed similar
 // artists; a couple of records from each are looked up in the Apple catalogue and their songs become the
 // daily playlist. The matching runs here so the renderer never handles the developer token.
-ipcMain.handle("lastfm-recommended", async (_e, { user } = {}) => {
+ipcMain.handle("lastfm-recommended", async (_e, query) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const seeds = await recommendations.topArtists({ user: String(user || "").trim(), key });
+    const seeds = await recommendations.topArtists({ user: String(query?.user || "").trim(), key });
     const artists = await recommendations.similarArtists({ seeds, key });
     const albums = await recommendations.albumsByArtists({ artists, key });
     return { seeds, artists, albums };
@@ -229,11 +229,11 @@ ipcMain.handle("lastfm-recommended", async (_e, { user } = {}) => {
   }
 });
 
-ipcMain.handle("lastfm-suggested", async (_e, { user } = {}) => {
+ipcMain.handle("lastfm-suggested", async (_e, query) => {
   const key = loadSecret("lastfm");
   if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
   try {
-    const seeds = await recommendations.topArtists({ user: String(user || "").trim(), key });
+    const seeds = await recommendations.topArtists({ user: String(query?.user || "").trim(), key });
     const artists = await recommendations.similarArtists({ seeds, key });
     const albums = await recommendations.albumsByArtists({ artists, key });
     const tok = await token();

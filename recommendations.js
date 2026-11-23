@@ -77,7 +77,7 @@ async function searchApple(type, term, { token, storefront, fetchFn = fetch }) {
     Origin: "https://music.apple.com",
     Referer: "https://music.apple.com/",
   };
-  const url = `https://amp-api.music.apple.com/v1/catalog/${storefront}/search?` +
+  const url = `https://amp-api.music.apple.com/v1/catalog/${encodeURIComponent(storefront)}/search?` +
     new URLSearchParams({ term, types: type, limit: "5" });
   const send = () => fetchFn(url, { headers, signal: AbortSignal.timeout(TIMEOUT) });
   let r = await send();
@@ -138,24 +138,42 @@ async function artistTopTracks(artistId, { token, storefront, fetchFn = fetch } 
   return (await r.json()).data || [];
 }
 
-// Albums first, then each artist's top songs to fill up; a song that turns up twice is only added once.
+// A few songs from each record first, so the playlist is a spread of suggestions rather than one album's
+// worth; then each artist's top songs, and only then the rest of the albums to fill any gap.
 async function buildSuggestedTracks({ albums = [], artists = [], token, storefront, fetchFn = fetch, maxTracks = 30 } = {}) {
-  const out = [], seen = new Set();
+  const out = [], seen = new Set(), fetched = new Map();
   const add = r => {
     const id = r?.id;
-    if (!id || seen.has(id)) return;
+    if (!id || seen.has(id)) return false;
     seen.add(id);
     out.push(r);
+    return true;
   };
-  for (const a of albums) {
+  const take = (list, per) => {
+    let taken = 0;
+    for (const t of list) {
+      if (out.length >= maxTracks || taken >= per) break;
+      if (add(t)) taken++;
+    }
+  };
+  // Each album is asked for once; a second pass reuses the answer instead of hitting Apple again.
+  const tracksOfAlbum = a => {
+    if (!fetched.has(a)) fetched.set(a, albumTracks(a.apple.id, { token, storefront, fetchFn }).catch(() => []));
+    return fetched.get(a);
+  };
+  const usable = list => list.filter(a => a.found && a.apple?.id);
+
+  for (const a of usable(albums)) {
     if (out.length >= maxTracks) break;
-    if (!a.found || !a.apple?.id) continue;
-    try { for (const t of await albumTracks(a.apple.id, { token, storefront, fetchFn })) { add(t); if (out.length >= maxTracks) break; } } catch {}
+    take(await tracksOfAlbum(a), 3);
   }
-  for (const a of artists) {
+  for (const a of usable(artists)) {
     if (out.length >= maxTracks) break;
-    if (!a.found || !a.apple?.id) continue;
-    try { for (const t of await artistTopTracks(a.apple.id, { token, storefront, fetchFn })) { add(t); if (out.length >= maxTracks) break; } } catch {}
+    try { take(await artistTopTracks(a.apple.id, { token, storefront, fetchFn }), 2); } catch {}
+  }
+  for (const a of usable(albums)) {
+    if (out.length >= maxTracks) break;
+    take(await tracksOfAlbum(a), Infinity);
   }
   return out.slice(0, maxTracks);
 }

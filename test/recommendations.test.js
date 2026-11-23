@@ -85,3 +85,15 @@ test("buildSuggestedTracks adds each song once and stops at the limit", async ()
   const out = await rec.buildSuggestedTracks({ albums, artists, token: "t", storefront: "us", fetchFn, maxTracks: 3 });
   assert.deepEqual(out.map(t => t.id), ["a1", "a2", "b1"]);
 });
+
+test("buildSuggestedTracks spreads the songs across albums instead of filling up on the first one", async () => {
+  const song = id => ({ id, type: "songs", attributes: { name: id, playParams: { id } } });
+  const fetchFn = async url => {
+    if (url.includes("/albums/one")) return json({ data: Array.from({ length: 10 }, (_, i) => song(`one${i}`)) })();
+    if (url.includes("/albums/two")) return json({ data: [song("two0"), song("two1")] })();
+    return json({ data: [] })();
+  };
+  const albums = [{ found: true, apple: { id: "one" } }, { found: true, apple: { id: "two" } }];
+  const out = await rec.buildSuggestedTracks({ albums, token: "t", storefront: "us", fetchFn, maxTracks: 5 });
+  assert.deepEqual(out.map(t => t.id), ["one0", "one1", "one2", "two0", "two1"]);
+});

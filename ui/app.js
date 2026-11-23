@@ -2117,16 +2117,23 @@ applyEQ();
 // Apple Music. Here they are turned into ordinary items (toItem) so covers, playback and menus all work,
 // and the songs become a real Apple Music playlist, replaced when a new day's set is built.
 const SUGGESTED_NAME = "Suggested Music";
-let suggestedCache = null;                 // { day, data } so Create doesn't fetch everything twice
+let suggestedCache = null;                 // { day, user, data } so Create doesn't fetch everything twice
 
-const todayKey = () => new Date().toISOString().slice(0, 10);
+// The local date, not UTC: a "daily" playlist should change at the user's midnight, not mid-afternoon.
+const todayKey = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// What is typed in Settings wins over what was saved last time, so Refresh after editing the username uses it.
+const suggestedUser = () => ($("lfmUser").value || "").trim() || prefs.lastfmUser || "";
 
 async function suggestedData({ fresh = false } = {}) {
-  const day = todayKey();
-  if (!fresh && suggestedCache?.day === day) return suggestedCache.data;
-  const r = await glass.lastfmSuggested({ user: prefs.lastfmUser || "" });
+  const day = todayKey(), user = suggestedUser();
+  if (!fresh && suggestedCache?.day === day && suggestedCache.user === user) return suggestedCache.data;
+  const r = await glass.lastfmSuggested({ user });
   if (r?.error) throw new Error(r.error);
-  suggestedCache = { day, data: r };
+  suggestedCache = { day, user, data: r };
   return r;
 }
 
@@ -2169,7 +2176,7 @@ async function suggestedPage() {
         },
       };
     }
-    const seed = prefs.lastfmUser ? `from ${prefs.lastfmUser}'s listening` : "from the Last.fm charts";
+    const seed = suggestedUser() ? `from ${suggestedUser()}'s listening` : "from the Last.fm charts";
     return {
       title: SUGGESTED_NAME,
       sub: `Similar artists ${seed} · ${todayKey()}`,
@@ -2191,25 +2198,43 @@ async function suggestedPage() {
   }
 }
 
-// Creates the playlist in the user's Apple Music library, then removes yesterday's copy. Apple answers with
-// the new playlist's library id, which is remembered so the next day knows what to delete.
+// Creates the playlist in the user's Apple Music library, then removes older copies. Apple answers with the
+// new playlist's library id, which is remembered so the next day knows what to delete.
+const SUGGESTED_MARK = "Last.fm suggestions for ";
+
+// Yesterday's copy, and any left behind if the saved settings were lost. Only playlists carrying our own
+// description are removed, so a playlist of the user's that happens to share the name is left alone.
+async function removeOldSuggested(keepId) {
+  let list = [];
+  try { list = (await amp("GET", "/v1/me/library/playlists?limit=100"))?.data || []; } catch { return; }
+  for (const p of list) {
+    const a = p.attributes || {};
+    if (p.id === keepId || a.name !== SUGGESTED_NAME) continue;
+    if (!String(a.description || "").startsWith(SUGGESTED_MARK)) continue;
+    try { await amp("DELETE", `/v1/me/library/playlists/${p.id}`); } catch {}
+  }
+}
+
 async function buildSuggestedPlaylist(data) {
   const songs = (data.tracks || []).map(t => toItem(t)).filter(t => t?.kind === "song" && t.playId);
   if (!songs.length) throw new Error("No suggested songs were found on Apple Music.");
   const created = await amp("POST", "/v1/me/library/playlists", {
-    attributes: { name: SUGGESTED_NAME, description: `Last.fm suggestions for ${todayKey()}` },
+    attributes: { name: SUGGESTED_NAME, description: `${SUGGESTED_MARK}${todayKey()}` },
   });
   const id = created?.data?.[0]?.id;
   if (!id) throw new Error("Apple Music didn't return the new playlist.");
-  for (let i = 0; i < songs.length; i += 100) {
-    await amp("POST", `/v1/me/library/playlists/${id}/tracks`, {
-      data: songs.slice(i, i + 100).map(s => ({ id: s.playId, type: "songs" })),
-    });
+  try {
+    for (let i = 0; i < songs.length; i += 100) {
+      await amp("POST", `/v1/me/library/playlists/${id}/tracks`, {
+        data: songs.slice(i, i + 100).map(s => ({ id: s.playId, type: "songs" })),
+      });
+    }
+  } catch (e) {
+    // Don't leave a half-filled playlist behind: the next attempt would make another one.
+    try { await amp("DELETE", `/v1/me/library/playlists/${id}`); } catch {}
+    throw e;
   }
-  const previous = prefs.suggestedPlaylist;
-  if (previous?.id && previous.id !== id) {
-    try { await amp("DELETE", `/v1/me/library/playlists/${previous.id}`); } catch {}
-  }
+  await removeOldSuggested(id);
   prefs.suggestedPlaylist = { id, day: todayKey(), songs: songs.length };
   savePrefs();
   return { id, songs };
@@ -2223,8 +2248,8 @@ $("suggestCreateBtn").onclick = async () => {
   b.disabled = true;
   suggestNote("Building the playlist…");
   try {
-    const { id, songs } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
-    suggestNote(`Created “${SUGGESTED_NAME}” with ${songs.length} song${songs.length === 1 ? "" : "s"} (${id.slice(0, 6)}…).`);
+    const { songs } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
+    suggestNote(`Created “${SUGGESTED_NAME}” with ${songs.length} song${songs.length === 1 ? "" : "s"}.`);
     if (view === "suggested") load();
     if (view === "library" && libraryFilter === "playlists") load();
   } catch (e) {
@@ -2253,11 +2278,14 @@ $("autoSuggestedPlaylist").checked = !!prefs.autoSuggestedPlaylist;
 $("autoSuggestedPlaylist").onchange = e => { prefs.autoSuggestedPlaylist = e.target.checked; savePrefs(); };
 
 // Once a day, when the app opens: rebuild the playlist if the toggle is on and today's copy isn't there.
-// Failures stay quiet here; the Settings section reports them when a button is pressed.
+// One attempt a day is enough; a failure is reported in Settings, where the buttons still retry on demand.
 let autoSuggestedBusy = false;
 async function maybeAutoCreateSuggested() {
   if (!prefs.autoSuggestedPlaylist || autoSuggestedBusy || !music?.isAuthorized) return;
-  if (prefs.suggestedPlaylist?.day === todayKey()) return;
+  const day = todayKey();
+  if (prefs.suggestedPlaylist?.day === day || prefs.suggestedAttempt === day) return;
+  prefs.suggestedAttempt = day;
+  savePrefs();
   autoSuggestedBusy = true;
   try {
     const { songs } = await buildSuggestedPlaylist(await suggestedData({ fresh: true }));
@@ -2269,6 +2297,8 @@ async function maybeAutoCreateSuggested() {
 }
 
 $("rememberVol").checked = prefs.rememberVolume;
+
+// ---- the queue ---------------------------------------------------------------------------------
 // Up Next can be rearranged by dragging, a song removed with its × (or the right-click menu), and the lot
 // cleared with Clear (click twice). The song that's playing is never touched, so playback carries on.
 // Local files use the same plans, applied to a plain array instead of MusicKit's queue.
