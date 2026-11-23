@@ -90,6 +90,7 @@
           <button class="nav-item" data-view="home"><svg class="icon"><use href="#i-home"/></svg><span>Home</span></button>
           <button class="nav-item" data-view="search"><svg class="icon"><use href="#i-search"/></svg><span>Search</span></button>
           <button class="nav-item" data-view="library"><svg class="icon"><use href="#i-list"/></svg><span>Library</span></button>
+          <button class="nav-item" data-view="suggested"><svg class="icon"><use href="#i-spark"/></svg><span>Suggested</span></button>
           <button class="nav-item" data-view="local">
             <svg class="icon"><use href="#i-folder"/></svg><span>Local Files</span><span id="localCount" class="count" hidden></span>
           </button>
@@ -353,6 +354,17 @@
         </div>
         <div class="muted" id="lfmStatus"></div>
         <details><summary class="muted">Songs not found on Apple Music</summary><pre class="muted" id="lfmMissing"></pre></details>
+      </div>
+
+      <p class="sheet-section">Suggested Music (daily)</p>
+      <div class="card">
+        <div>Build a fresh Suggested Music playlist every day from Last.fm recommendations</div>
+        <label class="switch-line"><span>Auto-create daily</span><input type="checkbox" id="autoSuggestedPlaylist" class="toggle"></label>
+        <div class="button-row">
+          <button class="action" id="suggestCreateBtn">Create Suggested Music playlist</button>
+          <button class="action subtle" id="suggestRefreshBtn">Refresh recommendations</button>
+        </div>
+        <div class="muted" id="suggestStatus">Last.fm recommendations need an API key in the Last.fm section above.</div>
       </div>
 
       <p class="sheet-section">Keyboard</p>

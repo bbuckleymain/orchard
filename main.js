@@ -9,6 +9,7 @@ const path = require("path");
 const lyricsSources = require("./lyrics-sources");
 const mpris = require("./mpris");
 const lastfm = require("./lastfm");
+const recommendations = require("./recommendations");
 const { LocalLibrary, isMedia, writeFlacLyrics } = require("./local-library");
 
 // On Linux Orchard publishes its own MPRIS player (see mpris.js), so Chromium's anonymous one is turned off:
@@ -149,7 +150,7 @@ function signIn() {
           if (typeof MusicKit === 'undefined') return null;
           const m = MusicKit.getInstance();
           if (m && m.isAuthorized && m.musicUserToken) return { token: m.musicUserToken, storefront: m.storefrontCountryCode || m.storefrontId || '' };
-          if (!${clicked}) { const b = [...document.querySelectorAll('button, a')].find(e => /^\\s*sign in\\s*$/i.test(e.textContent)); if (b) { b.click(); return 'clicked'; } }
+          if (!${clicked}) { const b = [...document.querySelectorAll('button, a')].find(e => /^\s*sign in\s*$/i.test(e.textContent)); if (b) { b.click(); return 'clicked'; } }
           return null;
         })()`);
         if (r === "clicked") clicked = true;
@@ -210,6 +211,46 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
   const tracks = await lastfm.topTracks({ user, key, min: Math.max(1, Math.floor(+min) || 10) });
   const storefront = (loadAccount()?.storefront || "us").toLowerCase();
   return { total: tracks.length, ...(await lastfm.matchAll(tracks, { token: await token(), storefront })) };
+});
+
+// Last.fm recommendations -> Apple Music.
+// The Last.fm recommendation pages are personalized and may be empty for anonymous users; we still
+// return whatever we find and let the UI explain.
+ipcMain.handle("lastfm-recommended", async () => {
+  const key = loadSecret("lastfm");
+  if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
+  try {
+    const [albums, artists] = await Promise.all([
+      recommendations.fetchRecommendedAlbums(),
+      recommendations.fetchRecommendedArtists(),
+    ]);
+    return { albums, artists };
+  } catch (e) {
+    return { error: e?.message || String(e) };
+  }
+});
+
+ipcMain.handle("lastfm-suggested", async () => {
+  const key = loadSecret("lastfm");
+  if (!key) return { error: "Save your Last.fm API key first (Settings > Last.fm)." };
+  try {
+    const token = await token();
+    const storefront = (loadAccount()?.storefront || "us").toLowerCase();
+    const [albums, artists] = await Promise.all([
+      recommendations.fetchRecommendedAlbums(),
+      recommendations.fetchRecommendedArtists(),
+    ]);
+    const [mAlbums, mArtists] = await Promise.all([
+      recommendations.matchAlbums(albums, { token, storefront }),
+      recommendations.matchArtists(artists, { token, storefront }),
+    ]);
+    const tracks = await recommendations.buildSuggestedTracks({
+      albums: mAlbums, artists: mArtists, token, storefront, maxTracks: 30,
+    });
+    return { albums: mAlbums, artists: mArtists, tracks };
+  } catch (e) {
+    return { error: e?.message || String(e) };
+  }
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());

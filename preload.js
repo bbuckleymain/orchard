@@ -11,6 +11,8 @@ contextBridge.exposeInMainWorld("glass", {
   lastfmStatus: () => ipcRenderer.invoke("lastfm-status"),
   setLastfmKey: key => ipcRenderer.invoke("lastfm-key", key),
   lastfmMatch: query => ipcRenderer.invoke("lastfm-match", query),
+  lastfmRecommended: () => ipcRenderer.invoke("lastfm-recommended"),
+  lastfmSuggested: () => ipcRenderer.invoke("lastfm-suggested"),
   window: action => ipcRenderer.send("window", action),
   mprisState: state => ipcRenderer.send("mpris-state", state),
   onMpris: cb => ipcRenderer.on("mpris", (_e, msg) => cb(msg)),
