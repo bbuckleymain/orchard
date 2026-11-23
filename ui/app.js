@@ -2539,16 +2539,51 @@ async function openReviewer(item) {
     const songs = await tracksOf(item);
     status("");
     if (!songs.length) throw new Error("this playlist is empty");
-    review = { item, run: OrchardReview.createReviewer(songs), busy: false };
+    review = { item, songs, run: OrchardReview.createReviewer(songs), busy: false, local: !!songs[0].local };
     $("reviewTitle").textContent = item.title || "Playlist";
     $("reviewer").hidden = false;
     paintReview();
+    await startReviewAudio();
   } catch (e) { status("Couldn't review that playlist: " + (e?.message || e), true); }
+}
+
+// The song on the card is the song you hear. Apple's queue is set once with the whole playlist, so moving on
+// is a queue change rather than a new request; local files are just the local queue.
+async function startReviewAudio() {
+  if (!review) return;
+  if (review.local) {
+    localQueue = [...review.songs];
+    localShuffle = false;
+    modes();
+    playLocalAt(0);
+    return;
+  }
+  if (!music) return;
+  try {
+    leaveLocal();
+    music.shuffleMode = 0;
+    await music.setQueue({ songs: review.songs.map(s => s.playId), startWith: 0, startPlaying: true });
+  } catch (e) { status("Couldn't play the first song: " + (e?.message || e), true); }
+}
+
+async function playReviewCurrent() {
+  if (!review) return;
+  const i = review.run.index;
+  if (review.run.done) { pauseReviewAudio(); return; }
+  if (review.local) playLocalAt(i);
+  else changeTo(i);          // the queue is the whole playlist, so this is a jump, not a new request
+}
+
+function pauseReviewAudio() {
+  if (!review) return;
+  if (review.local) localAudio.pause();
+  else if (music?.isPlaying) music.pause();
 }
 
 async function closeReviewer() {
   if (!review) return;
   const item = review.item;
+  pauseReviewAudio();
   review = null;
   $("reviewer").hidden = true;
   if (lastPage?.hero?.item?.id === item.id) {          // the page on screen is the playlist that changed
@@ -2567,6 +2602,7 @@ async function decideReview(keep) {
     card.classList.remove("leaving-right", "leaving-left");
     keep ? review.run.keep() : review.run.reject();
     paintReview();
+    await playReviewCurrent();
   } catch (e) {
     status("Couldn't remove that song: " + (e?.message || e), true);
   }
@@ -3683,6 +3719,7 @@ document.addEventListener("keydown", e => {
     if (e.key === "Escape") { e.preventDefault(); closeReviewer(); return; }
     if (e.key === "ArrowLeft") { e.preventDefault(); decideReview(false); return; }
     if (e.key === "ArrowRight") { e.preventDefault(); decideReview(true); return; }
+    if (e.code === "Space") { e.preventDefault(); togglePlay(); return; }
   }
   const el = document.activeElement;
   // Any text box counts (the search, the API keys), so typing there never fires a shortcut.
