@@ -516,6 +516,29 @@ body.sidebar-collapsed #mini { left: calc(var(--sidebar-w) + 14px); }
 .vol-slider::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: rgba(29, 26, 36, .13); }
 .vol-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 10px; height: 10px; margin-top: -3px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
 .vol-slider:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-faint); }
+
+/* The level on hover: a small glass chip above the mute button, filled in the cover's accent like the seek
+   bar. Read-only; the slider beside it (or the wheel) still does the setting. */
+.vol-anchor { position: relative; display: inline-flex; }
+.vol-pop {
+  --vol: 80%;
+  position: absolute; bottom: calc(100% + 10px); left: 50%;
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: var(--r-sm);
+  background: var(--panel-strong); border: 1px solid var(--line); box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px) saturate(1.2);
+  opacity: 0; transform: translate(-50%, 4px); pointer-events: none; white-space: nowrap;
+  transition: opacity .16s, transform .16s var(--ease); z-index: 40;
+}
+.vol-anchor:hover .vol-pop,
+.vol-anchor:focus-within .vol-pop { opacity: 1; transform: translate(-50%, 0); }
+.vol-pop-track { width: 86px; height: 4px; border-radius: 4px; background: var(--line-strong); overflow: hidden; }
+.vol-pop-fill { display: block; height: 100%; width: var(--vol); border-radius: inherit; background: var(--accent); transition: width .12s linear; }
+.vol-pop-num { font-size: var(--text-xs); font-weight: 750; letter-spacing: .02em; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.vol-pop.muted .vol-pop-num { color: var(--ink-3); }
+/* The mini bar's mute button sits near the window edge, so its chip hangs from the right instead of centred. */
+#mini .vol-pop { left: auto; right: 0; transform: translate(0, 4px); }
+#mini .vol-anchor:hover .vol-pop,
+#mini .vol-anchor:focus-within .vol-pop { transform: translate(0, 0); }
 #miniStatusLine {
   position: absolute; left: 20px; right: 20px; bottom: 0; height: 2px; width: 0;
   background: var(--accent); opacity: .45; border-radius: 2px; pointer-events: none; transition: width .12s linear;

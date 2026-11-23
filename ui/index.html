@@ -154,7 +154,13 @@
         <button id="miniStage" class="icon-btn" title="Lyrics stage (F)" aria-label="Lyrics stage"><svg class="icon"><use href="#i-mic"/></svg></button>
         <button id="miniLyrics" class="icon-btn" title="Lyrics (Y)" aria-label="Lyrics"><svg class="icon"><use href="#i-lyrics"/></svg></button>
         <button id="miniQueue" class="icon-btn" title="Queue (Q)" aria-label="Queue"><svg class="icon"><use href="#i-queue"/></svg></button>
-        <button id="miniVolumeIcon" class="icon-btn" title="Mute (M)" aria-label="Mute"><svg class="icon"><use href="#i-volume"/></svg></button>
+        <span class="vol-anchor">
+          <button id="miniVolumeIcon" class="icon-btn" aria-label="Mute (M)"><svg class="icon"><use href="#i-volume"/></svg></button>
+          <span class="vol-pop" id="miniVolPop" aria-hidden="true">
+            <span class="vol-pop-track"><span class="vol-pop-fill"></span></span>
+            <span class="vol-pop-num">80%</span>
+          </span>
+        </span>
         <input id="miniVol" class="vol-slider" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
         <button id="miniExpand" class="icon-btn" title="Expand player" aria-label="Expand player"><svg class="icon"><use href="#i-expand"/></svg></button>
       </div>
@@ -197,7 +203,13 @@
           </div>
           <div class="player-utility">
             <button id="playerFav" class="icon-btn heart-btn" title="Favorite" aria-label="Favorite"><svg class="icon"><use href="#i-heart"/></svg></button>
-            <button id="playerVolumeIcon" class="icon-btn" title="Mute (M)" aria-label="Mute"><svg class="icon"><use href="#i-volume"/></svg></button>
+            <span class="vol-anchor">
+              <button id="playerVolumeIcon" class="icon-btn" aria-label="Mute (M)"><svg class="icon"><use href="#i-volume"/></svg></button>
+              <span class="vol-pop" id="volPop" aria-hidden="true">
+                <span class="vol-pop-track"><span class="vol-pop-fill"></span></span>
+                <span class="vol-pop-num">80%</span>
+              </span>
+            </span>
             <input id="vol" class="vol-slider" type="range" min="0" max="1" step="0.01" value="0.8" aria-label="Volume">
             <span id="badge" class="badge" hidden>256 kbps</span>
           </div>

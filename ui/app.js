@@ -410,9 +410,21 @@ function showVolume() {
   for (const id of ["miniVolumeIcon", "playerVolumeIcon"]) {
     const b = $(id);
     b.classList.toggle("muted", muted);
-    b.title = muted ? "Unmute (M)" : "Mute (M)";
-    b.setAttribute("aria-label", b.title);
+    b.setAttribute("aria-label", muted ? "Unmute (M)" : "Mute (M)");
     b.querySelector("use").setAttribute("href", muted ? "#i-mute" : "#i-volume");
+  }
+  paintVolPops();
+}
+// The chip above each mute button reads the same level as the sliders, so muting, the wheel and the keyboard
+// all keep it honest without a second piece of state.
+function paintVolPops() {
+  const level = Math.round(clamp(+$("vol").value, 0, 1) * 100);
+  for (const id of ["miniVolPop", "volPop"]) {
+    const pop = $(id);
+    if (!pop) continue;
+    pop.style.setProperty("--vol", level + "%");
+    pop.querySelector(".vol-pop-num").textContent = level + "%";
+    pop.classList.toggle("muted", level === 0);
   }
 }
 function toggleMute() {

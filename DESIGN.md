@@ -63,6 +63,7 @@ Body copy never goes below 12px. The 11.5px tier is for short labels only.
 | Selection bar | full-width glass strip under the topbar, 14px radius | — | "N albums selected", Shuffle albums, Clear | buttons |
 | Lyrics stage | full-screen dark overlay, artist photo + scrim, large words | — | current line white, past dim, click seeks | Esc closes |
 | Filter bar / scope bar | flex wrap, 6px gap, 20px bottom margin | — | active chip filled | per chip |
+| Volume chip | glass panel-strong, 10px radius, 4px track + accent fill, 11.5px number, sits 10px above the mute button | opacity 0 → 1, rises 4px, `--ease`, 160ms | muted level greys the number | shows on `:focus-within` too |
 
 ### Shell contract
 
