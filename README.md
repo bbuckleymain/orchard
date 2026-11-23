@@ -29,8 +29,12 @@ library between launches. FLAC is the primary format (STREAMINFO, VORBIS_COMMENT
 Local Files has All, Albums, Artists and Songs tabs. Shuffle albums plays every local record in a random
 order, each in its own track order.
 
-You can build playlists by hand: create a local playlist, then add or remove songs, albums or artists from
-any right-click menu. You can add to Apple playlists from the same menu when you are signed in.
+You can build playlists by hand: **Library → Playlists → New playlist** makes one in the app or, when you are
+signed in, in your Apple Music library. Add or remove songs, albums or artists from any right-click menu.
+
+**Import from Spotify** (Settings) takes a public Spotify playlist link, finds each track on Apple Music and
+creates a playlist with the same name; anything it could not find is listed. Spotify's public page lists the
+first 50 tracks, which the import says when it applies.
 
 The five-band equalizer (Flat, Warm, Bright, Vocal, Bass) works on local files only. Web Audio cannot process
 Apple's protected stream. The library stays in Electron's user data directory, and Orchard uploads nothing.

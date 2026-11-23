@@ -8,6 +8,7 @@ const TIMEOUT = 15000;
 // form is what stops a recommendation being dropped for a diacritic or a bracketed edition.
 const norm = s => String(s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
   .replace(/\s*[([][^)\]]*(remaster|deluxe|edition|version|anniversary|mono|stereo)[^)\]]*[)\]]/g, "")
+  .replace(/\s*[([][^)\]]*\b(feat|feat\.|featuring|with)\b[^)\]]*[)\]]/g, "")
   .replace(/\s+-\s+.*$/, "")
   .replace(/[^a-z0-9]+/g, " ").trim();
 
@@ -260,6 +261,21 @@ async function matchArtists(artists, { token, storefront, fetchFn = fetch } = {}
   });
 }
 
+// Songs, for a playlist imported from somewhere else. The title is matched first and the artist only breaks
+// ties, because Spotify and Apple disagree about "feat." credits and edition suffixes far more than titles.
+async function matchSongs(tracks, { token, storefront, fetchFn = fetch } = {}) {
+  return mapLimit(tracks, 4, async t => {
+    try {
+      const results = await searchApple("songs", `${t.title} ${t.artist || ""}`.trim(), { token, storefront, fetchFn });
+      const title = norm(t.title), artist = norm(t.artist);
+      const exact = results.find(r => norm(r.attributes?.name) === title && norm(r.attributes?.artistName) === artist);
+      const byTitle = results.find(r => norm(r.attributes?.name) === title);
+      const match = exact || byTitle || results[0];
+      return match ? { ...t, found: true, apple: match } : { ...t, found: false };
+    } catch (e) { return { ...t, found: false, error: e.message }; }
+  });
+}
+
 // ---- songs to put in the playlist ---------------------------------------------------------------
 // Apple resources, not bare attributes: the renderer turns these into its own items with toItem().
 // The album's own resource is not a track, so /tracks is the endpoint; an artist's top songs live under
@@ -334,5 +350,5 @@ module.exports = {
   topArtists, topTags, artistsByTags, similarArtists, albumsByArtists, recommendArtists,
   sign, authGetToken, authGetSession, recommendedArtists, checkKey,
   artistFromHref, albumFromHref,
-  matchAlbums, matchArtists, albumTracks, artistTopTracks, buildSuggestedTracks,
+  matchAlbums, matchArtists, matchSongs, albumTracks, artistTopTracks, buildSuggestedTracks,
 };

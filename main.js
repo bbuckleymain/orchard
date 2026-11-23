@@ -11,6 +11,7 @@ const lyricsSources = require("./lyrics-sources");
 const mpris = require("./mpris");
 const lastfm = require("./lastfm");
 const recommendations = require("./recommendations");
+const spotify = require("./spotify");
 const { LocalLibrary, isMedia, writeFlacLyrics } = require("./local-library");
 
 // On Linux Orchard publishes its own MPRIS player (see mpris.js), so Chromium's anonymous one is turned off:
@@ -463,6 +464,28 @@ ipcMain.handle("lastfm-suggested", async (_e, query) => {
 });
 ipcMain.handle("sign-in", () => signIn());
 ipcMain.handle("sign-out", () => signOut());
+
+// A Spotify playlist, matched onto Apple Music. Reads the public embed page (no credentials) and returns the
+// Apple song resources in playlist order, so the renderer can create the playlist the same way as Suggested.
+ipcMain.handle("spotify-import", async (_e, query) => {
+  try {
+    const id = spotify.playlistId(query?.url);
+    if (!id) return { error: "That doesn't look like a Spotify playlist link." };
+    const list = await spotify.embed(id);
+    const tok = await token();
+    const storefront = (loadAccount()?.storefront || "us").toLowerCase();
+    const matched = await recommendations.matchSongs(list.tracks, { token: tok, storefront });
+    return {
+      name: list.name,
+      total: list.tracks.length,
+      partial: list.partial,
+      tracks: matched.filter(m => m.found).map(m => m.apple),
+      missing: matched.filter(m => !m.found).map(m => `${m.artist} – ${m.title}`),
+    };
+  } catch (e) {
+    return { error: e?.message || String(e) };
+  }
+});
 
 // ---- local files ----
 // The library lives in userData; the renderer asks for it on launch and after every change.

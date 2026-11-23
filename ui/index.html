@@ -394,6 +394,18 @@
         <div class="muted" id="suggestStatus">Last.fm recommendations need an API key in the Last.fm section above.</div>
       </div>
 
+      <p class="sheet-section">Import from Spotify</p>
+      <div class="card">
+        <div>Bring a Spotify playlist into your Apple Music library</div>
+        <div class="muted">Paste a public playlist link. Each track is found on Apple Music and the ones that aren't are listed. Needs an Apple Music sign-in.</div>
+        <div class="inline-row">
+          <input id="spotifyUrl" placeholder="https://open.spotify.com/playlist/…" autocomplete="off">
+          <button class="action" id="spotifyImport">Import</button>
+        </div>
+        <div class="muted" id="spotifyStatus"></div>
+        <details><summary class="muted">Tracks not found on Apple Music</summary><pre class="muted" id="spotifyMissing"></pre></details>
+      </div>
+
       <p class="sheet-section">Keyboard</p>
       <div class="card">
         <dl class="keys">

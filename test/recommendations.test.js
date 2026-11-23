@@ -217,6 +217,23 @@ test("buildSuggestedTracks fills a 100-song playlist by default", async () => {
   assert.equal(new Set(out.map(t => t.id)).size, 100, "no repeats");
 });
 
+test("matchSongs matches on the title and ignores 'feat.' credits", async () => {
+  const song = (id, name, artistName) => ({ id, type: "songs", attributes: { name, artistName, playParams: { id } } });
+  const fetchFn = async url => {
+    const term = new URL(url).searchParams.get("term");
+    if (term.startsWith("Flower In A Hurricane")) return json({ results: { songs: { data: [song("1", "Flower In A Hurricane", "Justice")] } } })();
+    if (term.startsWith("Unknown")) return json({ results: { songs: { data: [] } } })();
+    return json({ results: { songs: { data: [song("2", "Something Else", "Other")] } } })();
+  };
+  const out = await rec.matchSongs([
+    { title: "Flower In A Hurricane (feat. Tame Impala)", artist: "Justice" },
+    { title: "Unknown", artist: "Nobody" },
+    { title: "Other Song", artist: "Someone" },
+  ], { token: "t", storefront: "us", fetchFn });
+  assert.deepEqual(out.map(m => m.found), [true, false, true]);
+  assert.equal(out[0].apple.id, "1");
+});
+
 test("albumsByArtists skips compilations and repeats", async () => {
   const replies = {
     "artist=One": { topalbums: { album: [{ name: "Greatest Hits" }, { name: "First" }, { name: "Second" }, { name: "Third" }] } },

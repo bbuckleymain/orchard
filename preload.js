@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("glass", {
   lastfmDisconnect: () => ipcRenderer.invoke("lastfm-disconnect"),
   lastfmRecommended: query => ipcRenderer.invoke("lastfm-recommended", query),
   lastfmSuggested: query => ipcRenderer.invoke("lastfm-suggested", query),
+  spotifyImport: query => ipcRenderer.invoke("spotify-import", query),
   window: action => ipcRenderer.send("window", action),
   mprisState: state => ipcRenderer.send("mpris-state", state),
   onMpris: cb => ipcRenderer.on("mpris", (_e, msg) => cb(msg)),

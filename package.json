@@ -33,6 +33,7 @@
       "lastfm.js",
       "local-library.js",
       "recommendations.js",
+      "spotify.js",
       "mpris.js",
       "musixmatch.js",
       "package.json",

@@ -1296,7 +1296,11 @@ function pageHead(page) {
   }
   if (page.newPlaylist) {
     const b = pillBtn("New playlist", "", "i-plus");
-    b.onclick = createPlaylistPrompt;
+    b.onclick = e => {
+      menuItem = { kind: "new" };
+      fillMenu([["mkLocal", "Local playlist…"], music?.isAuthorized && ["mkApple", "Apple Music playlist…"]]);
+      placeMenu(e.clientX, e.clientY);
+    };
     actions.append(b);
     hasActions = true;
   }
@@ -1775,13 +1779,6 @@ function newLocalPlaylist(name) {
   return pl;
 }
 
-function createPlaylistPrompt() {
-  const name = prompt("Name for the new playlist");
-  if (name == null) return;
-  newLocalPlaylist(name);
-  if (view === "library" && libraryFilter === "playlists") load();
-}
-
 async function addToLocalPlaylist(pl, item) {
   const songs = await tracksOf(item);
   let added = 0;
@@ -2072,6 +2069,22 @@ const ACTIONS = {
     await open(artist);
     return "";
   },
+  // New playlists, from Library → Playlists. Local ones live in the app; Apple ones go to the account.
+  async mkLocal() {
+    const name = prompt("Name for the new playlist");
+    if (name == null) return "";
+    const pl = newLocalPlaylist(name);
+    if (view === "library" && libraryFilter === "playlists") load();
+    return `Created “${pl.name}”.`;
+  },
+  async mkApple() {
+    if (!music?.isAuthorized) throw new Error("sign in to Apple Music first");
+    const name = prompt("Name for the new Apple Music playlist");
+    if (name == null || !name.trim()) return "";
+    await createApplePlaylist(name.trim(), []);
+    if (view === "library" && libraryFilter === "playlists") load();
+    return `Created “${name.trim()}” in your Apple Music library.`;
+  },
   async qplay({ li }) { +li.dataset.i === queuePos() ? await seekTo(0) : await changeTo(+li.dataset.i); return ""; },
   async qtop({ li }) { await moveQueued(li, (n, pos) => pos + 1); return ""; },
   async qup({ li }) { await moveQueued(li, +li.dataset.i - 1); return ""; },
@@ -2336,11 +2349,11 @@ async function removeOldSuggested(keepId) {
   }
 }
 
-async function buildSuggestedPlaylist(data) {
-  const songs = (data.tracks || []).map(t => toItem(t)).filter(t => t?.kind === "song" && t.playId);
-  if (!songs.length) throw new Error("No suggested songs were found on Apple Music.");
+// Creates a playlist in the user's Apple Music library and fills it, in batches of 100. If filling fails the
+// half-made playlist is removed, so a retry doesn't leave a trail of empty ones.
+async function createApplePlaylist(name, songs, description = "") {
   const created = await amp("POST", "/v1/me/library/playlists", {
-    attributes: { name: SUGGESTED_NAME, description: `${SUGGESTED_MARK}${todayKey()}` },
+    attributes: { name, ...(description ? { description } : {}) },
   });
   const id = created?.data?.[0]?.id;
   if (!id) throw new Error("Apple Music didn't return the new playlist.");
@@ -2351,10 +2364,16 @@ async function buildSuggestedPlaylist(data) {
       });
     }
   } catch (e) {
-    // Don't leave a half-filled playlist behind: the next attempt would make another one.
     try { await amp("DELETE", `/v1/me/library/playlists/${id}`); } catch {}
     throw e;
   }
+  return id;
+}
+
+async function buildSuggestedPlaylist(data) {
+  const songs = (data.tracks || []).map(t => toItem(t)).filter(t => t?.kind === "song" && t.playId);
+  if (!songs.length) throw new Error("No suggested songs were found on Apple Music.");
+  const id = await createApplePlaylist(SUGGESTED_NAME, songs, `${SUGGESTED_MARK}${todayKey()}`);
   const previous = prefs.suggestedPlaylist?.id;
   if (previous && !sameId(previous, id)) {
     try { await amp("DELETE", `/v1/me/library/playlists/${previous}`); } catch {}
@@ -2407,6 +2426,35 @@ $("suggestRefreshBtn").onclick = async () => {
 
 $("autoSuggestedPlaylist").checked = !!prefs.autoSuggestedPlaylist;
 $("autoSuggestedPlaylist").onchange = e => { prefs.autoSuggestedPlaylist = e.target.checked; savePrefs(); };
+
+// ---- import from Spotify -------------------------------------------------------------------------
+// The playlist is read from Spotify's public embed page, each track is matched on Apple Music, and the
+// matches become a new Apple Music playlist with the Spotify playlist's name.
+$("spotifyImport").onclick = async () => {
+  const b = $("spotifyImport"), note = $("spotifyStatus");
+  if (!music?.isAuthorized) { note.textContent = "Sign in to Apple Music first (Account)."; return; }
+  const url = $("spotifyUrl").value.trim();
+  if (!url) { note.textContent = "Paste a Spotify playlist link first."; return; }
+  b.disabled = true;
+  note.textContent = "Reading the playlist and finding the songs on Apple Music…";
+  $("spotifyMissing").textContent = "";
+  try {
+    const r = await glass.spotifyImport({ url });
+    if (r?.error) throw new Error(r.error);
+    const songs = (r.tracks || []).map(t => toItem(t)).filter(t => t?.kind === "song" && t.playId);
+    if (!songs.length) throw new Error("none of those tracks were found on Apple Music");
+    const name = (r.name || "Spotify playlist").trim();
+    await createApplePlaylist(name, songs);
+    $("spotifyMissing").textContent = (r.missing || []).join("\n");
+    const left = r.missing?.length ? ` ${r.missing.length} not found.` : "";
+    const cut = r.partial ? " Spotify's public page lists the first 50 tracks." : "";
+    note.textContent = `Imported ${songs.length} of ${r.total} songs into “${name}”.${left}${cut}`;
+    if (view === "library" && libraryFilter === "playlists") load();
+  } catch (e) {
+    note.textContent = "Couldn't import: " + String(e?.message || e).replace(/^.*Error: /, "");
+  }
+  b.disabled = false;
+};
 
 // Once a day, when the app opens: rebuild the playlist if the toggle is on and today's copy isn't there.
 // One attempt a day is enough; a failure is reported in Settings, where the buttons still retry on demand.
@@ -2974,7 +3022,7 @@ const MENU_ICONS = {
   back: "i-back", qplay: "i-play", qtop: "i-chevron-down", qup: "i-chevron-down",
   qdown: "i-chevron-down", qbottom: "i-chevron-down", qremove: "i-close",
   fetchLyrics: "i-lyrics", deletePlaylist: "i-trash", removeFromPlaylist: "i-close",
-  goAlbum: "i-disc", goArtist: "i-users",
+  goAlbum: "i-disc", goArtist: "i-users", mkLocal: "i-folder", mkApple: "i-music",
 };
 
 function menuEntries(item) {
