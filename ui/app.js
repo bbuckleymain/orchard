@@ -2147,7 +2147,7 @@ async function suggestedData({ fresh = false } = {}) {
   if (!fresh && suggestedCache?.day === day && suggestedCache.user === user) return suggestedCache.data;
   await glass.lastfmAuth().catch(() => null);   // finishes a Last.fm approval that arrived late
   const known = await knownArtists();
-  const r = await glass.lastfmSuggested({ user, known });
+  const r = await glass.lastfmSuggested({ user, known, fresh });
   if (r?.error) throw new Error(r.error);
   suggestedCache = { day, user, data: r };
   return r;

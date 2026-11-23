@@ -255,8 +255,10 @@ const LFM_URL = /^https:\/\/([a-z0-9-]+\.)?last\.fm(\/|$)/i;
 
 function lfmWindow(show) {
   const w = new BrowserWindow({
-    show, width: 520, height: 760, parent: win, title: "Last.fm", autoHideMenuBar: true, backgroundColor: "#1c1c1c",
-    webPreferences: { partition: LFM_PARTITION, contextIsolation: true },
+    show, width: 520, height: 760, title: "Last.fm", autoHideMenuBar: true, backgroundColor: "#1c1c1c",
+    // No images: the tiles' own link still holds an <img> element, so the read below is unaffected, but the
+    // page costs a fraction of the memory and bandwidth. The window is short-lived and always destroyed.
+    webPreferences: { partition: LFM_PARTITION, contextIsolation: true, images: false, backgroundThrottling: true },
   });
   w.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   w.webContents.on("will-navigate", (e, url) => { if (!LFM_URL.test(url)) e.preventDefault(); });
@@ -292,38 +294,60 @@ async function lfmTiles(w, url, selector) {
   })()`, true);
 }
 
-async function lfmSuggestedPage() {
-  const w = lfmWindow(false);
-  try {
-    const artistHrefs = await lfmTiles(w, "https://www.last.fm/music/+recommended/artists", ".music-recommended-artists");
-    if (!artistHrefs?.length) { saveSecret("lastfm-page", ""); return null; }
-    const albumHrefs = await lfmTiles(w, "https://www.last.fm/music/+recommended/albums", ".music-recommended-albums");
-    saveSecret("lastfm-page", "1");
-    return {
-      artists: artistHrefs.map(h => recommendations.artistFromHref(h)).filter(Boolean).map(name => ({ name })),
-      albums: (albumHrefs || []).map(h => recommendations.albumFromHref(h)).filter(Boolean),
-    };
-  } catch {
-    return null;
-  } finally { w.destroy(); }
+// One scrape at a time: pressing Create and Refresh together must not open two hidden windows. The whole
+// read is capped, and the window is always destroyed.
+let scraping = null;
+function lfmSuggestedPage() {
+  if (scraping) return scraping;
+  scraping = (async () => {
+    const w = lfmWindow(false);
+    const cap = setTimeout(() => { try { w.destroy(); } catch {} }, 45000);
+    try {
+      const artistHrefs = await lfmTiles(w, "https://www.last.fm/music/+recommended/artists", ".music-recommended-artists");
+      if (!artistHrefs?.length) { saveSecret("lastfm-page", ""); return null; }
+      const albumHrefs = await lfmTiles(w, "https://www.last.fm/music/+recommended/albums", ".music-recommended-albums");
+      saveSecret("lastfm-page", "1");
+      return {
+        artists: artistHrefs.map(h => recommendations.artistFromHref(h)).filter(Boolean).map(name => ({ name })),
+        albums: (albumHrefs || []).map(h => recommendations.albumFromHref(h)).filter(Boolean),
+      };
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(cap);
+      try { w.destroy(); } catch {}
+    }
+  })().finally(() => { scraping = null; });
+  return scraping;
 }
+
+const localDay = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+let pageCache = null;                      // { day, value } so opening the tab again doesn't re-read Last.fm
 
 // Only after a Last.fm sign-in has worked once: otherwise every page load would open a hidden window for
 // nothing. A failed read clears the flag, so the next attempt goes straight to the API.
-async function pageSuggestions() {
+async function pageSuggestions({ fresh = false } = {}) {
   if (!loadSecret("lastfm-page")) return null;
-  const page = await lfmSuggestedPage().catch(() => null);
-  return page?.artists?.length ? page : null;
+  if (!fresh && pageCache?.day === localDay()) return pageCache.value;
+  const page = await lfmSuggestedPage();
+  if (!page?.artists?.length) return null;
+  pageCache = { day: localDay(), value: page };
+  return page;
 }
 
 ipcMain.handle("lastfm-login", async () => {
   await lastfmLogin();
+  pageCache = null;
   const page = await lfmSuggestedPage().catch(() => null);
   return { signedIn: !!page?.artists?.length, page: lastfmAuth() };
 });
 ipcMain.handle("lastfm-page", async () => lfmSuggestedPage());
 ipcMain.handle("lastfm-signout", async () => {
   saveSecret("lastfm-page", "");
+  pageCache = null;
   try { await session.fromPartition(LFM_PARTITION).clearStorageData(); } catch {}
   return lastfmAuth();
 });
@@ -392,7 +416,7 @@ ipcMain.handle("lastfm-match", async (_e, { user, min }) => {
 ipcMain.handle("lastfm-recommended", async (_e, query) => {
   const key = loadSecret("lastfm");
   try {
-    const page = await pageSuggestions();
+    const page = await pageSuggestions({ fresh: !!query?.fresh });
     if (page) return page;
     if (!key) return { error: "Sign in to Last.fm, or save your API key in Settings > Last.fm." };
     const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";
@@ -411,7 +435,7 @@ ipcMain.handle("lastfm-suggested", async (_e, query) => {
   const key = loadSecret("lastfm");
   try {
     let artists = [], albums = [];
-    const page = await pageSuggestions();
+    const page = await pageSuggestions({ fresh: !!query?.fresh });
     if (page) ({ artists, albums } = page);
     else if (key) {
       const user = String(query?.user || "").trim() || loadSecret("lastfm-session-name") || "";

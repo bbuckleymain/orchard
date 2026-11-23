@@ -34,10 +34,11 @@ step — CommonJS everywhere.
 - `recommendations.js` is pure Node too: Last.fm's API and Apple catalogue search. The exact list comes from
   `main.js` reading `last.fm/music/+recommended/{artists,albums}` in a hidden window on the `persist:lastfm`
   partition (the page is server-rendered and bot-challenged, so it needs a real browser and a sign-in); the
-  helpers `artistFromHref`/`albumFromHref` pull the names out of its links. Without that, `recommendArtists`
-  walks `artist.getsimilar` from the overall top artists (or `user.getRecommendedArtists` with an API session).
-  Signing is md5 of the sorted parameters plus the secret. The renderer turns Apple resources into items with
-  `toItem()`; the playlist is created through `amp()`.
+  helpers `artistFromHref`/`albumFromHref` pull the names out of its links. That window is one at a time, has
+  images off, is capped at 45 s and is always destroyed; the result is cached for the day. Without it,
+  `recommendArtists` walks `artist.getsimilar` from the overall top artists (or `user.getRecommendedArtists`
+  with an API session). Signing is md5 of the sorted parameters plus the secret. The renderer turns Apple
+  resources into items with `toItem()`; the playlist is created through `amp()`.
 - Local lyrics: `main.js` runs the LRCLIB job after a scan and on request, writes `<song>.lrc`, and embeds synced
   words into FLAC `VORBIS_COMMENT`; `lyricsFor()` reads the sidecar first, then the file. The lyrics stage uses
   Deezer artist photos cached in `artist-photos.json`. Hand-built playlists live in `localStorage` under
