@@ -351,6 +351,10 @@ test("a scanned library groups albums and artists", async () => {
   const again = lib.get();
   assert.equal(again.tracks.length, 3);
   assert.deepEqual(again.roots.map(r => r.kind), ["folder"]);
+  // The renderer filters local.tracks itself, so albums and artists travel without their track lists.
+  assert.equal(again.albums[0].tracks, undefined);
+  assert.equal(again.artists[0].tracks, undefined);
+  assert.equal(again.artists[0].count, 3);
 
   lib.removeTrack(state.tracks[0].path);
   assert.equal(lib.get().tracks.length, 2);

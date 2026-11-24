@@ -513,12 +513,33 @@ class LocalLibrary {
     } catch (e) { console.warn("[Orchard] Could not save local library:", e.message); }
   }
 
-  get() {
-    return { roots: this.state.roots, tracks: this.state.tracks, excluded: this.state.excluded,
-             albums: this.albums(), artists: this.artists() };
+  // The lyrics job touches the library once per track; writing every time meant two full-library files per
+  // song. This coalesces those into one write a second.
+  saveLater() {
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(() => { this._saveTimer = null; this.save(); }, 1000);
+    this._saveTimer.unref?.();
   }
 
-  albums() {
+  // The same writes, off the event loop: a big library is tens of megabytes and a sync write would stall
+  // the window at the end of every scan.
+  async saveAsync() {
+    try {
+      await fs.promises.mkdir(this.dir, { recursive: true });
+      await fs.promises.writeFile(this.file, JSON.stringify(this.state));
+      await fs.promises.writeFile(this.cacheFile, JSON.stringify(this.cache));
+      await fs.promises.writeFile(this.lyricsFile, JSON.stringify(this.lyrics));
+    } catch (e) { console.warn("[Orchard] Could not save local library:", e.message); }
+  }
+
+  // `lean` leaves each album's and artist's `tracks` out: the renderer already has every track and filters
+  // by albumKey or name, and sending the same objects three times made the IPC payload enormous.
+  get(lean = true) {
+    return { roots: this.state.roots, tracks: this.state.tracks, excluded: this.state.excluded,
+             albums: this.albums(lean), artists: this.artists(lean) };
+  }
+
+  albums(lean = false) {
     const map = new Map();
     for (const t of this.state.tracks) {
       let a = map.get(t.albumKey);
@@ -531,10 +552,11 @@ class LocalLibrary {
       a.ms = a.tracks.reduce((n, t) => n + (t.ms || 0), 0);
       a.count = a.tracks.length;
     }
-    return [...map.values()].sort((a, b) => (a.artist || "").localeCompare(b.artist || "", undefined, { sensitivity: "base" }) || a.title.localeCompare(b.title));
+    const list = [...map.values()].sort((a, b) => (a.artist || "").localeCompare(b.artist || "", undefined, { sensitivity: "base" }) || a.title.localeCompare(b.title));
+    return lean ? list.map(({ tracks, ...rest }) => rest) : list;
   }
 
-  artists() {
+  artists(lean = false) {
     const map = new Map();
     for (const t of this.state.tracks) {
       const name = t.albumArtist || t.artist || "Unknown Artist";
@@ -543,7 +565,9 @@ class LocalLibrary {
       a.tracks.push(t);
       if (!a.art && t.art) a.art = t.art;
     }
-    return [...map.values()].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+    const list = [...map.values()].map(a => ({ ...a, count: a.tracks.length }))
+      .sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" }));
+    return lean ? list.map(({ tracks, ...rest }) => rest) : list;
   }
 
   async scan(roots, onProgress) {
@@ -551,7 +575,7 @@ class LocalLibrary {
     const files = [];
     for (const root of roots) {
       const found = [];
-      walk(root.path, found);
+      await walk(root.path, found);
       for (const f of found) if (!excluded.has(f)) files.push(f);
     }
     const unique = [...new Set(files.map(f => path.resolve(f)))];
@@ -568,13 +592,14 @@ class LocalLibrary {
       }
       done++;
       if (onProgress && (done % 10 === 0 || done === unique.length)) onProgress({ done, total: unique.length, file });
+      if (done % 20 === 0) await yieldToLoop();     // keep the window answering while a big folder is read
     }
     sortTracks(tracks);
     this.state.tracks = tracks;
     // drop cache entries for files that are gone
     const alive = new Set(unique);
     for (const key of Object.keys(this.cache)) if (!alive.has(key)) delete this.cache[key];
-    this.save();
+    await this.saveAsync();
     return this.get();
   }
 
@@ -624,7 +649,11 @@ class LocalLibrary {
 
   // What the lyrics job knows about a file: whether it was tried and whether the result was timed.
   lyricsInfo(file) { return this.lyrics[path.resolve(file)] || null; }
-  setLyricsInfo(file, info) { this.lyrics[path.resolve(file)] = info; this.save(); }
+  // `save` false is for the bulk lyrics job, which coalesces its writes through saveLater() instead.
+  setLyricsInfo(file, info, save = true) {
+    this.lyrics[path.resolve(file)] = info;
+    if (save) this.save(); else this.saveLater();
+  }
 }
 
 module.exports = { LocalLibrary, parseFlac, parseId3, parseMp4, parseWav, readTrack, walk, isAudio, isMedia, mediaUrl, embeddedLyrics, writeFlacLyrics, AUDIO_EXT, MEDIA_EXT };

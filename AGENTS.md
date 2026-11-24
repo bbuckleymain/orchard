@@ -29,7 +29,9 @@ step — CommonJS everywhere.
 - `ui/lyrics.js`, `ui/queue.js` and `ui/review.js` are classic-script IIFEs with a `module.exports` guard so tests
   can require them. Keep them dependency-free and CommonJS-testable.
 - `local-library.js` is pure Node (no Electron) so it can be tested; it parses FLAC/ID3v2/MP4/WAV by hand with no
-  dependencies. Library data lives in Electron `userData` (`local-library.json`, `local-cache.json`,
+  dependencies. A scan yields to the event loop every 20 files (and every 200 directory entries) so a big
+  folder doesn't freeze the window; `get()` is lean (albums/artists without their `tracks` arrays, which the
+  renderer rebuilds from `local.tracks`) and the bulk lyrics job coalesces its writes through `saveLater()`. Library data lives in Electron `userData` (`local-library.json`, `local-cache.json`,
   `local-lyrics.json`, `artist-photos.json`, `covers/`), not in the repo.
 - `spotify.js` is pure Node: it turns a playlist link into an id and reads either the public embed page's
   `__NEXT_DATA__` (no credentials, first 50 tracks) or the Web API with the user's client id/secret (whole

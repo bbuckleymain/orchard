@@ -554,7 +554,7 @@ function writeSidecar(file, text, force) {
   } catch { return false; }
 }
 
-async function fetchLyricsFor(track, { force = false } = {}) {
+async function fetchLyricsFor(track, { force = false, persist = true } = {}) {
   if (!track?.path) return { found: false };
   const info = localLib?.lyricsInfo(track.path);
   if (!force && info && info.mtimeMs === track.mtimeMs && info.done) {
@@ -580,10 +580,10 @@ async function fetchLyricsFor(track, { force = false } = {}) {
       const st = fs.statSync(track.path);
       track.mtimeMs = st.mtimeMs;
       track.size = st.size;
-      localLib?.save();
+      if (persist) localLib?.save(); else localLib?.saveLater();
     } catch {}
   }
-  localLib?.setLyricsInfo(track.path, { mtimeMs: track.mtimeMs, done: true, found: true, synced, source: "LRCLIB" });
+  localLib?.setLyricsInfo(track.path, { mtimeMs: track.mtimeMs, done: true, found: true, synced, source: "LRCLIB" }, persist);
   return { found: true, synced, text, source: "LRCLIB" };
 }
 
@@ -605,7 +605,7 @@ async function runLyricsJob(tracks, { force = false, sender = null } = {}) {
   for (let i = 0; i < tracks.length; i += 3) {
     if (job !== lyricsJob) break;
     const batch = tracks.slice(i, i + 3);
-    const results = await Promise.all(batch.map(t => fetchLyricsFor(t, { force }).catch(() => ({ found: false }))));
+    const results = await Promise.all(batch.map(t => fetchLyricsFor(t, { force, persist: false }).catch(() => ({ found: false }))));
     for (const r of results) if (r?.found) found++;
     done += batch.length;
     send({ done, total, found, file: batch[batch.length - 1]?.path || "", title: batch[batch.length - 1]?.title || "" });

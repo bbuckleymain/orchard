@@ -1100,8 +1100,15 @@ async function recentPage() {
 }
 
 function mostPlayedPage() {
+  // Albums arrive without their tracks (the payload would be three times the size), so the counts are
+  // gathered from the track list once.
+  const perAlbum = new Map();
+  for (const t of local.tracks) {
+    if (!t.albumKey) continue;
+    perAlbum.set(t.albumKey, (perAlbum.get(t.albumKey) || 0) + (plays[t.id] || 0));
+  }
   const scored = local.albums
-    .map(a => ({ a, n: (a.tracks || []).reduce((sum, t) => sum + (plays[t.id] || 0), 0) }))
+    .map(a => ({ a, n: perAlbum.get(a.albumKey) || 0 }))
     .filter(x => x.n > 0)
     .sort((x, y) => y.n - x.n);
   return {
@@ -1486,7 +1493,7 @@ function artistCard(item, i) {
   }
   card.appendChild(box);
   card.appendChild(el("div", "ac-title", item.title || ""));
-  const sub = item.local && item.tracks?.length ? `${item.tracks.length} songs` : "Artist";
+  const sub = item.local && item.count ? `${item.count} song${item.count === 1 ? "" : "s"}` : "Artist";
   card.appendChild(el("div", "ac-sub", sub));
   return card;
 }
