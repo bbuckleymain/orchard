@@ -239,7 +239,11 @@ function currentDuration() {
 // MusicKit's currentPlaybackTime is floored to whole seconds, far too coarse for lyrics.
 // The <audio> element MusicKit plays through has the real position. When a song follows on by itself,
 // MusicKit can move to another element and leave the old one sitting at the end of the last song, so
-// only an element that agrees with MusicKit's own (floored) time is believed.
+// only an element that agrees with MusicKit's own (floored) time is believed. With no element to read,
+// the floored time is interpolated so word fills move every frame instead of stepping once a second.
+let clock = { t: 0, at: 0 };
+function anchorClock(t) { clock = { t: t || 0, at: performance.now() }; }
+
 function playTime() {
   const coarse = music?.currentPlaybackTime || 0;
   let best = null;
@@ -247,7 +251,9 @@ function playTime() {
     if (a === localAudio || !a.currentSrc || !Number.isFinite(a.currentTime) || Math.abs(a.currentTime - coarse) > 1.5) continue;
     if (!best || (best.paused && !a.paused)) best = a;
   }
-  return best ? best.currentTime : coarse;
+  if (best) return best.currentTime;
+  if (!music?.isPlaying) return coarse;
+  return clock.t + (performance.now() - clock.at) / 1000;
 }
 
 const currentTime = () => (localItem() ? localAudio.currentTime || 0 : playTime());
@@ -538,6 +544,7 @@ function lockQuality() {
 
 function onState() {
   if (localItem()) return;
+  anchorClock(music?.currentPlaybackTime || 0);      // pausing or resuming restarts the interpolated clock
   setPlayingUI();
   report();
 }
@@ -555,6 +562,7 @@ function onItem() {
 
 function onTime() {
   if (localItem()) return;
+  anchorClock(music?.currentPlaybackTime || 0);      // the interpolated clock resyncs on every real update
   if (seeking || !music?.currentPlaybackDuration) return;
   showTimes(music.currentPlaybackTime || 0, music.currentPlaybackDuration);
   positionState();
@@ -659,7 +667,8 @@ function seekTo(t) {
   const dur = currentDuration();
   t = clamp(t, 0, Math.max(dur - 0.05, 0));
   if (localItem()) localAudio.currentTime = t;
-  else music?.seekToTime(t).then(() => report({ seeked: true })).catch(() => {});
+  else music?.seekToTime(t).then(() => { anchorClock(t); report({ seeked: true }); }).catch(() => {});
+  anchorClock(t);
   showTimes(t, dur);
 }
 
@@ -3082,15 +3091,29 @@ function stageTick() {
       nodes[i].classList.toggle("past", i < idx);
       nodes[i].style.setProperty("--blur", `${Math.min(d * 0.5, 2)}px`);
       nodes[i].style.setProperty("--op", `${Math.max(1 - d * 0.11, 0.3)}`);
+      if (i !== idx) nodes[i].querySelectorAll(".w").forEach(w => { w.style.removeProperty("--p"); w.classList.remove("sung"); });
     }
     const cur = nodes[Math.max(idx, 0)];
     if (cur && Date.now() > stageScrollUntil) box.scrollTo({ top: cur.offsetTop - box.clientHeight * 0.42, behavior: "smooth" });
   }
   const line = lines[idx], node = nodes[idx];
-  if (line?.rest && node) {
+  if (!line || !node) return;
+  if (line.rest) {
     const g = clamp((t - line.rest[0]) / (line.rest[1] - line.rest[0]), 0, 1);
     node.querySelectorAll(".dots i").forEach((dot, k) => dot.style.setProperty("--g", Math.min(Math.max(g * 3 - k, 0), 1)));
+    return;
   }
+  // The stage draws word spans, so it has to fill them too; without this it was line-by-line only.
+  if (!prefs.wordSync) return;
+  const fillWords = (words, spans, lineEnd) => words.forEach((w, k) => {
+    const end = w.end ?? words[k + 1]?.start ?? lineEnd ?? w.start + 0.55;
+    const p = clamp((t - w.start) / Math.max(end - w.start, 0.05), 0, 1) * 100;
+    spans[k]?.style.setProperty("--p", p.toFixed(1));
+    spans[k]?.classList.toggle("sung", p > 0);
+  });
+  node._spans ??= [...node.querySelectorAll(":scope > .w")];
+  fillWords(line.words, node._spans, line.end);
+  if (line.bg?.length) fillWords(line.bg, node._bgSpans ??= [...node.querySelectorAll(".bgv .w")], line.end);
 }
 
 async function stagePhoto(it) {
